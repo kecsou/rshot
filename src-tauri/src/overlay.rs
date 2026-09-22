@@ -154,6 +154,8 @@ pub fn overlay_ready(window: WebviewWindow, state: State<'_, AppState>, token: u
         #[cfg(target_os = "linux")]
         ui::force_focus(&window);
         eprintln!("rshot: overlay visible at {} ({} ms after trigger)", epoch_ms(), s.started.elapsed().as_millis());
+        // The other overlays wait for this before fetching their frames, so they don't slow it down.
+        window.emit("overlay:primary-ready", token).map_err(err)?;
     }
     Ok(())
 }

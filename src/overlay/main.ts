@@ -7,9 +7,26 @@ import * as ipc from '../shared/ipc';
 const canvas = document.querySelector<HTMLCanvasElement>('#frame')!;
 let info: ipc.OverlayInfo | null = null;
 
+// Keep: non-active overlays wait for overlay:primary-ready (Task 6 perf gate)
+let primaryReady = 0;
+let wakeWaiter = () => {};
+void listen<number>('overlay:primary-ready', (e) => {
+  primaryReady = e.payload;
+  wakeWaiter();
+});
+/** Resolves once the active overlay has painted this session's frame (or after 500 ms). */
+function afterPrimary(token: number): Promise<void> {
+  if (primaryReady === token) return Promise.resolve();
+  return new Promise((resolve) => {
+    wakeWaiter = () => primaryReady === token && resolve();
+    setTimeout(resolve, 500);
+  });
+}
+
 async function load() {
   const next = await ipc.overlayInfo();
   if (!next) return;
+  if (!next.active) await afterPrimary(next.token);
   const buf = await ipc.overlayFrame();
   info = next;
   canvas.width = next.width;

@@ -24,7 +24,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 gdkx11 = "0.18"
 gtk = "0.18"
+libc = "0.2"
 x11rb = { version = "0.14", features = ["xfixes"] }
+zbus = "5"
 
 # Optimise dependencies (xcap, image/png) in dev builds; a debug capture takes seconds otherwise.
 [profile.dev.package."*"]

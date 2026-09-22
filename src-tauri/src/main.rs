@@ -48,6 +48,18 @@ fn main() {
         eprintln!("{e}");
         std::process::exit(2)
     });
+    #[cfg(target_os = "linux")]
+    if !matches!(cmd, cli::Cmd::Daemon | cli::Cmd::RestoreShortcuts) && forward_to_daemon() {
+        return;
+    }
+    // Frame-sized buffers (8-16 MB) must go back to the OS when freed. glibc's dynamic mmap
+    // threshold otherwise rises to the first freed frame's size and parks later frames in
+    // per-thread arenas, whose free tops malloc_trim can't release (~16 MB per arena).
+    #[cfg(target_os = "linux")]
+    // SAFETY: plain allocator tuning, before any other thread exists.
+    unsafe {
+        libc::mallopt(libc::M_MMAP_THRESHOLD, 1 << 20);
+    }
 
     let app = tauri::Builder::default()
         // Must stay the first plugin: a second `rshot …` forwards its argv here and exits.
@@ -86,6 +98,26 @@ fn main() {
     });
 }
 
+/// The single-instance plugin's D-Bus name: tauri.conf.json's identifier + ".SingleInstance".
+#[cfg(target_os = "linux")]
+const SINGLE_INSTANCE_NAME: &str = "io.github.kecsou.rshot.SingleInstance";
+
+/// Hands argv to a running daemon through the single-instance plugin's own D-Bus interface,
+/// before Tauri/GTK start. The plugin would forward the same call, but only after the whole app
+/// has initialised: doing it here saves ~45 ms per key press (measured).
+/// `false` = no daemon answered; the caller then starts as the daemon.
+#[cfg(target_os = "linux")]
+fn forward_to_daemon() -> bool {
+    let path = format!("/{}", SINGLE_INSTANCE_NAME.replace('.', "/"));
+    let argv: Vec<String> = std::env::args().collect();
+    let cwd = std::env::current_dir().unwrap_or_default().display().to_string();
+    zbus::blocking::Connection::session()
+        .and_then(|c| {
+            c.call_method(Some(SINGLE_INSTANCE_NAME), path.as_str(), Some("org.SingleInstance.DBus"), "ExecuteCallback", &(argv, cwd))
+        })
+        .is_ok()
+}
+
 pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
     eprintln!("rshot: dispatch {cmd:?}");
     use cli::Cmd::*;
@@ -97,5 +129,14 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
     };
     if let Err(e) = result {
         pipeline::notify(app, &e);
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    #[test]
+    fn single_instance_name_follows_the_bundle_identifier() {
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(format!("{}.SingleInstance", conf["identifier"].as_str().unwrap()), super::SINGLE_INSTANCE_NAME);
     }
 }

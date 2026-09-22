@@ -25,20 +25,23 @@ pub struct WinRect {
 
 use crate::err;
 
+/// Grabs every monitor, each on its own thread (xcap opens a connection per call, so the grabs and
+/// pixel conversions overlap). Frames keep `Monitor::all()` order.
 pub fn grab_all(show_pointer: bool) -> Result<Vec<Frame>, String> {
     let cursor = if show_pointer { cursor::grab() } else { None };
-    xcap::Monitor::all()
-        .map_err(err)?
-        .iter()
-        .map(|m| {
-            let mut image = m.capture_image().map_err(err)?;
-            let (x, y) = (m.x().map_err(err)?, m.y().map_err(err)?);
-            if let Some(c) = &cursor {
-                cursor::composite(&mut image, c, x, y);
-            }
-            Ok(Frame { name: m.name().unwrap_or_default(), x, y, image })
-        })
-        .collect()
+    let monitors = xcap::Monitor::all().map_err(err)?;
+    let grab = |m: &xcap::Monitor| -> Result<Frame, String> {
+        let mut image = m.capture_image().map_err(err)?;
+        let (x, y) = (m.x().map_err(err)?, m.y().map_err(err)?);
+        if let Some(c) = &cursor {
+            cursor::composite(&mut image, c, x, y);
+        }
+        Ok(Frame { name: m.name().unwrap_or_default(), x, y, image })
+    };
+    std::thread::scope(|s| {
+        let jobs: Vec<_> = monitors.iter().map(|m| s.spawn(move || grab(m))).collect();
+        jobs.into_iter().map(|j| j.join().map_err(|_| "monitor grab panicked".to_string())?).collect()
+    })
 }
 
 /// Index of the frame containing the desktop point, or 0.
