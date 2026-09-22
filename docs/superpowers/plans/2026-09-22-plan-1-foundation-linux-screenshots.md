@@ -838,10 +838,12 @@ impl Clipboard {
         Self { tx }
     }
 
-    /// Path + file (+ PNG unless `mode` is PathOnly).
+    /// PathAndImage: path text + file (+ PNG when given). PathOnly: the path text alone (spec §2.4).
     pub fn copy_capture(&self, path: &Path, png: Option<&[u8]>, mode: ClipboardMode) -> Result<(), String> {
-        let png = if mode == ClipboardMode::PathAndImage { png } else { None };
-        self.set(contents(path, png))
+        match mode {
+            ClipboardMode::PathAndImage => self.set(contents(path, png)),
+            ClipboardMode::PathOnly => self.set(text_only(path)),
+        }
     }
 
     /// Image only — used when saving failed, so the capture isn't lost.
@@ -884,12 +886,23 @@ fn image_only(png: &[u8]) -> Vec<ClipboardContent> {
     vec![ClipboardContent::Other("image/png".into(), png.to_vec())]
 }
 
+/// Path as text only: the three text targets, no file or image targets.
+#[cfg(target_os = "linux")]
+fn text_only(path: &Path) -> Vec<ClipboardContent> {
+    contents(path, None).into_iter().take(3).collect()
+}
+
 #[cfg(not(target_os = "linux"))]
 fn contents(path: &Path, png: Option<&[u8]>) -> Vec<ClipboardContent> {
     let p = path.to_string_lossy().into_owned();
     let mut v = vec![ClipboardContent::Text(p.clone()), ClipboardContent::Files(vec![p])];
     v.extend(image_only(png.unwrap_or_default()));
     v
+}
+
+#[cfg(not(target_os = "linux"))]
+fn text_only(path: &Path) -> Vec<ClipboardContent> {
+    vec![ClipboardContent::Text(path.to_string_lossy().into_owned())]
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -924,6 +937,19 @@ mod tests {
         assert_eq!(get("image/png"), b"PNG");
         assert!(linux_formats(p, None).iter().all(|(n, _)| *n != "image/png"));
     }
+
+    #[test]
+    fn text_only_serves_just_the_path_text() {
+        let formats: Vec<String> = text_only(Path::new("/tmp/s.png"))
+            .into_iter()
+            .map(|c| match c {
+                ClipboardContent::Text(_) => "UTF8_STRING".to_string(),
+                ClipboardContent::Other(f, _) => f,
+                _ => "unexpected".to_string(),
+            })
+            .collect();
+        assert_eq!(formats, ["UTF8_STRING", "text/plain;charset=utf-8", "text/plain"]);
+    }
 }
 ```
 
@@ -948,7 +974,7 @@ impl AppState {
 - [ ] **Step 3: Run the tests and confirm they fail**
 
 Run: `cargo test clipboard`
-Expected: both tests FAIL (empty URI / `unwrap()` on `None`).
+Expected: all three tests FAIL (empty URI / `unwrap()` on `None` / empty format list).
 
 - [ ] **Step 4: Implement the helpers**
 
@@ -986,7 +1012,7 @@ pub fn linux_formats(path: &Path, png: Option<&[u8]>) -> Vec<(&'static str, Vec<
 ```
 
 Run: `cargo test clipboard`
-Expected: `2 passed`.
+Expected: `3 passed`.
 
 - [ ] **Step 5: Commit**
 
