@@ -32,3 +32,12 @@ export const overlayCancel = () => invoke<void>('overlay_cancel');
 export const overlayCapture = (token: number, target: Target) => invoke<void>('overlay_capture', { token, target });
 export const setOverlayOptions = (options: OverlayOptions) => invoke<void>('set_overlay_options', { options });
 export const pickFolder = () => invoke<string | null>('pick_folder');
+
+export type Thumb = { path: string; display: string; copied: boolean };
+export const thumbnailInfo = () => invoke<Thumb | null>('thumbnail_info');
+export const readCapture = (path: string) => invoke<ArrayBuffer>('read_capture', { path });
+export const revealCapture = (path: string) => invoke<void>('reveal_capture', { path });
+export const openCapture = (path: string) => invoke<void>('open_capture', { path });
+export const deleteCapture = (path: string) => invoke<void>('delete_capture', { path });
+export const retryCopy = (path: string) => invoke<void>('retry_copy', { path });
+export const dismissThumbnail = () => invoke<void>('dismiss_thumbnail');

@@ -198,3 +198,16 @@ pub fn show_countdown(app: &AppHandle, (cx, cy): (i32, i32)) -> Result<(), Strin
     win.show().map_err(err)?;
     win.set_focus().map_err(err)
 }
+
+/// Bottom-right of the monitor under the pointer.
+pub fn show_thumbnail(app: &AppHandle) -> Result<(), String> {
+    let p = app.cursor_position().map_err(err)?;
+    let m = monitor_at(app, p.x, p.y)?;
+    let s = m.scale_factor();
+    let (w, h) = (270.0, 240.0);
+    let win = popup(app, "thumbnail", "thumbnail/index.html", w, h, false)?;
+    let x = m.position().x + m.size().width as i32 - ((w + 6.0) * s) as i32;
+    let y = m.position().y + m.size().height as i32 - ((h + 6.0) * s) as i32;
+    win.set_position(PhysicalPosition::new(x, y)).map_err(err)?;
+    win.show().map_err(err)
+}

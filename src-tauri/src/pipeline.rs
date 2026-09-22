@@ -30,12 +30,25 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
         }
     };
     let copied = state.clipboard.copy_capture(&path, Some(&png), cfg.clipboard_mode);
+    if let Err(e) = &copied {
+        eprintln!("rshot: clipboard: {e}");
+    }
     *state.last_capture.lock().unwrap() = Some(path.clone());
+    *state.thumb.lock().unwrap() = Some(crate::thumbnail::Thumb {
+        path: path.display().to_string(),
+        display: crate::thumbnail::tildify(&path),
+        copied: copied.is_ok(),
+    });
     if cfg.shutter_sound {
         play_shutter(app);
     }
-    if let Err(e) = copied {
-        notify(app, &format!("Saved {}, but copying failed: {e}", path.display()));
+    if cfg.show_thumbnail {
+        // The capture already succeeded; a missing thumbnail must not turn it into an error.
+        if let Err(e) = crate::ui::show_thumbnail(app) {
+            eprintln!("rshot: thumbnail: {e}");
+        }
+    } else if copied.is_err() {
+        notify(app, "Screenshot saved, but copying to the clipboard failed");
     }
     Ok(path)
 }

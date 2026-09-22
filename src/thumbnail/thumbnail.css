@@ -1,0 +1,17 @@
+html, body { width: 100%; height: 100%; overflow: hidden; }
+#card { position: absolute; right: 12px; bottom: 12px; width: 230px; border-radius: 12px; overflow: hidden; background: rgba(40, 40, 46, 0.7); transition: transform 0.2s ease, opacity 0.2s ease; animation: in 0.22s ease-out; }
+@keyframes in { from { transform: translateY(12px); opacity: 0; } }
+#card.out { transform: translateX(260px); opacity: 0; }
+.shot { position: relative; height: 132px; background: #111; display: grid; place-items: center; }
+.shot img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.acts { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+#card:hover .acts { opacity: 1; }
+.acts button { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: rgba(20, 20, 24, 0.72); color: #fff; }
+.acts .ic { width: 13px; height: 13px; }
+.foot { display: flex; align-items: center; gap: 7px; padding: 8px 10px; font: 500 11px Inter; }
+.ok { width: 16px; height: 16px; border-radius: 50%; background: var(--ok); display: grid; place-items: center; color: #062; flex-shrink: 0; }
+.ok .ic { width: 10px; height: 10px; stroke-width: 3; }
+.ok.fail { background: var(--danger); color: #fff; }
+.txt { min-width: 0; flex: 1; }
+.txt small { display: block; color: rgba(255, 255, 255, 0.55); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#retry { height: 24px; padding: 0 9px; font-size: 11px; }

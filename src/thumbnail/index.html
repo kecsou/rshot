@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>rshot thumbnail</title>
+  </head>
+  <body>
+    <div id="card" class="glass">
+      <div class="shot">
+        <img id="img" alt="Capture preview" draggable="false" />
+        <div class="acts">
+          <button data-act="reveal" data-icon="i-folder" title="Show in folder" aria-label="Show in folder"></button>
+          <button data-act="delete" data-icon="i-trash" title="Delete" aria-label="Delete"></button>
+        </div>
+      </div>
+      <div class="foot">
+        <span class="ok" id="ok"><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg></span>
+        <div class="txt"><b id="status">Path copied</b><small id="path"></small></div>
+        <button id="retry" class="b2" hidden>Retry</button>
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -6,6 +6,7 @@ mod clipboard;
 mod overlay;
 mod pipeline;
 mod store;
+mod thumbnail;
 mod ui;
 
 use tauri::{AppHandle, RunEvent};
@@ -22,6 +23,7 @@ pub struct AppState {
     pub session: std::sync::Mutex<Option<overlay::Session>>,
     pub next_token: std::sync::atomic::AtomicU64,
     pub pending: std::sync::Mutex<Option<overlay::Pending>>,
+    pub thumb: std::sync::Mutex<Option<thumbnail::Thumb>>,
 }
 
 impl AppState {
@@ -33,6 +35,7 @@ impl AppState {
             session: std::sync::Mutex::new(None),
             next_token: std::sync::atomic::AtomicU64::new(1),
             pending: std::sync::Mutex::new(None),
+            thumb: std::sync::Mutex::new(None),
         }
     }
 }
@@ -74,6 +77,8 @@ fn main() {
         .manage(AppState::new())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_drag::init())
         .invoke_handler(tauri::generate_handler![
             overlay::overlay_info,
             overlay::overlay_frame,
@@ -86,6 +91,13 @@ fn main() {
             overlay::countdown_info,
             overlay::countdown_done,
             overlay::countdown_cancel,
+            thumbnail::thumbnail_info,
+            thumbnail::read_capture,
+            thumbnail::reveal_capture,
+            thumbnail::open_capture,
+            thumbnail::delete_capture,
+            thumbnail::retry_copy,
+            thumbnail::dismiss_thumbnail,
         ])
         .setup(move |app| {
             ui::create_tray(app.handle())?;
