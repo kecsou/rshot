@@ -105,7 +105,7 @@ pub fn open_settings(app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn open_onboarding(app: &AppHandle) -> Result<(), String> {
-    dialog_window(app, "onboarding", "onboarding/index.html", "Welcome to rshot", 480.0, 360.0)
+    dialog_window(app, "onboarding", "onboarding/index.html", "Welcome to rshot", 480.0, 400.0)
 }
 
 pub fn overlay_index(label: &str) -> Option<usize> {

@@ -41,27 +41,34 @@ function render() {
   }
 }
 
-async function save() {
-  s = await ipc.setSettings(s);
+/** Applies one change to the latest settings: the overlay's options can change some while this window is open. */
+async function update(change: (fresh: ipc.Settings) => void) {
+  const fresh = await ipc.getSettings();
+  change(fresh);
+  s = await ipc.setSettings(fresh);
   render();
 }
+
+addEventListener('focus', async () => {
+  if (rebinding) return;
+  const error = s.takeover_error; // keep the manual-binding help while the user goes to set it up
+  s = { ...(await ipc.getSettings()), takeover_error: error };
+  render();
+});
 
 document.addEventListener('click', async (e) => {
   const b = (e.target as Element).closest<HTMLElement>('button');
   if (!b) return;
   if (b.dataset.key) {
     const k = b.dataset.key as ipc.BoolSetting;
-    s[k] = !s[k];
-    await save();
+    const on = !s[k]; // the opposite of what the user sees
+    await update((f) => (f[k] = on));
   } else if (b.dataset.v) {
-    s.clipboard_mode = b.dataset.v as ipc.ClipboardMode;
-    await save();
+    const mode = b.dataset.v as ipc.ClipboardMode;
+    await update((f) => (f.clipboard_mode = mode));
   } else if (b.id === 'folder') {
     const d = await ipc.pickFolder();
-    if (d) {
-      s.screenshots_dir = d;
-      await save();
-    }
+    if (d) await update((f) => (f.screenshots_dir = d));
   } else if (b.dataset.shortcut) {
     rebinding = b;
     render();
@@ -78,9 +85,9 @@ addEventListener('keydown', async (e) => {
   }
   const combo = comboFrom(e);
   if (!combo) return;
-  s.shortcuts[rebinding.dataset.shortcut as keyof ipc.Shortcuts] = combo;
+  const which = rebinding.dataset.shortcut as keyof ipc.Shortcuts;
   rebinding = null;
-  await save();
+  await update((f) => (f.shortcuts[which] = combo));
 });
 
 document.querySelector('#version')!.textContent = `rshot ${await getVersion()}`;

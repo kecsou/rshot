@@ -46,11 +46,17 @@ fn take_over_or_roll_back(c: &mut store::Config) -> Result<(), String> {
             c.takeover = true;
             Ok(())
         }
-        Err(e) => {
-            let _ = shortcuts::restore(c);
-            c.takeover = false;
-            Err(e)
-        }
+        Err(e) => match shortcuts::restore(c) {
+            Ok(()) => {
+                c.takeover = false;
+                Err(e)
+            }
+            // A kept backup means GNOME's keys may still be cleared: stay "on" so turning it off retries.
+            Err(r) => {
+                c.takeover = c.gnome_backup.is_some();
+                Err(format!("{e}; putting GNOME's shortcuts back also failed: {r}"))
+            }
+        },
     }
 }
 

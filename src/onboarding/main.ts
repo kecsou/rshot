@@ -10,11 +10,23 @@ const rows: [string, string][] = [
   ['Capture screen', s.shortcuts.screen],
   ['Capture window', s.shortcuts.window],
 ];
-document.querySelector('#keys')!.innerHTML = rows.map(([label, key]) => `<div>${label}<kbd>${key}</kbd></div>`).join('');
+for (const [label, key] of rows) {
+  const row = document.createElement('div');
+  const kbd = document.createElement('kbd');
+  kbd.textContent = key; // from config.toml: never HTML
+  row.append(label, kbd);
+  document.querySelector('#keys')!.append(row);
+}
+const err = document.querySelector<HTMLElement>('#err')!;
 
 document.querySelector('#no')!.addEventListener('click', async () => {
-  await ipc.onboardingChoice(false);
-  await ipc.closeWindow();
+  try {
+    await ipc.onboardingChoice(false);
+    await ipc.closeWindow();
+  } catch (e) {
+    err.hidden = false;
+    err.textContent = `Couldn't save your choice: ${String(e)}`;
+  }
 });
 
 document.querySelector('#yes')!.addEventListener('click', async () => {
@@ -22,7 +34,6 @@ document.querySelector('#yes')!.addEventListener('click', async () => {
     await ipc.onboardingChoice(true);
     await ipc.closeWindow();
   } catch (e) {
-    const err = document.querySelector<HTMLElement>('#err')!;
     const manual = (await ipc.getSettings()).manual;
     document.querySelector<HTMLElement>('#keys')!.hidden = true; // the error lists the keys with their commands
     err.hidden = false;
