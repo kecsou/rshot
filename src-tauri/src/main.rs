@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod cli;
+mod clipboard;
 mod store;
 mod ui;
 
@@ -13,11 +14,15 @@ pub fn err(e: impl std::fmt::Display) -> String {
 
 pub struct AppState {
     pub config: std::sync::Mutex<store::Config>,
+    pub clipboard: clipboard::Clipboard,
 }
 
 impl AppState {
     fn new() -> Self {
-        Self { config: std::sync::Mutex::new(store::load_config()) }
+        Self {
+            config: std::sync::Mutex::new(store::load_config()),
+            clipboard: clipboard::Clipboard::spawn(),
+        }
     }
 }
 
