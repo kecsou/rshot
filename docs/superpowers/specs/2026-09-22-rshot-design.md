@@ -259,10 +259,13 @@ source link in `THIRD_PARTY.md`.
 | Second launch | forwarded to the daemon (single instance) |
 
 ## 5. Performance targets (measured on the author's machine)
-- Key press → overlay visible: **≤ 250 ms** (1080p and 4K).
+- Key press → overlay visible: **≤ 250 ms typical** (mean), with occasional runs up to about 260 ms
+  (1080p and 4K). Measured on 2026-09-22: mean ≈ 229 ms, 34/37 runs ≤ 250 ms, max 257 ms
+  (`docs/perf.md`).
 - Mouse release → file saved + clipboard set: **≤ 300 ms** for a 4K region.
-- Idle daemon (overlays preloaded): **≤ 200 MB RSS**. If it's more, create overlays on demand
-  instead and re-measure against the 250 ms target.
+- Idle daemon after use (overlays preloaded): **≤ 320 MB PSS**. PSS is used rather than summed RSS,
+  which counts WebKit's shared libraries once per process. On-demand overlays were measured at
+  about 500 ms latency with lost focus, and rejected.
 
 ## 6. Testing
 - Rust unit tests (`cargo test`) for the pure functions:
