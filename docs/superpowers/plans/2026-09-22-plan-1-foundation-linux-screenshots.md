@@ -2442,6 +2442,22 @@ let drag: Drag | null = null;
 let pointer: [number, number] | null = null; // image pixels
 let busy = false;
 
+// Keep: non-active overlays wait for overlay:primary-ready (Task 6 perf gate): the overlay under the
+// pointer gets the IPC bandwidth first, the others fetch their frames once it has painted (or after 500 ms).
+let primaryReady = 0;
+let wakeWaiter = () => {};
+void listen<number>('overlay:primary-ready', (e) => {
+  primaryReady = e.payload;
+  wakeWaiter();
+});
+function afterPrimary(token: number): Promise<void> {
+  if (primaryReady === token) return Promise.resolve();
+  return new Promise((resolve) => {
+    wakeWaiter = () => primaryReady === token && resolve();
+    setTimeout(resolve, 500);
+  });
+}
+
 /** Image pixels per CSS pixel (monitor scale); read live because the window size settles after show. */
 const k = () => (info ? info.width / innerWidth : 1);
 const toImg = (e: MouseEvent): [number, number] => [e.clientX * k(), e.clientY * k()];
@@ -2453,6 +2469,7 @@ const place = (el: HTMLElement, r: Rect) => {
 async function load() {
   const next = await ipc.overlayInfo();
   if (!next) return;
+  if (!next.active) await afterPrimary(next.token);
   const buf = await ipc.overlayFrame();
   info = next;
   pixels = new Uint8ClampedArray(buf);
