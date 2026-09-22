@@ -36,6 +36,13 @@ impl AppState {
 }
 
 fn main() {
+    // WebKitGTK's DMA-BUF renderer crashes or renders blank on some NVIDIA/EGL setups; the
+    // shared-memory path is plenty for rshot's small windows. Respect an explicit user setting.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = cli::parse(&args).unwrap_or_else(|e| {
         eprintln!("{e}");
