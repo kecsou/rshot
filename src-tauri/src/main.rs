@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod capture;
 mod cli;
 mod clipboard;
+mod pipeline;
 mod store;
 mod ui;
 
@@ -15,6 +17,7 @@ pub fn err(e: impl std::fmt::Display) -> String {
 pub struct AppState {
     pub config: std::sync::Mutex<store::Config>,
     pub clipboard: clipboard::Clipboard,
+    pub last_capture: std::sync::Mutex<Option<std::path::PathBuf>>,
 }
 
 impl AppState {
@@ -22,6 +25,7 @@ impl AppState {
         Self {
             config: std::sync::Mutex::new(store::load_config()),
             clipboard: clipboard::Clipboard::spawn(),
+            last_capture: std::sync::Mutex::new(None),
         }
     }
 }
@@ -42,6 +46,7 @@ fn main() {
             }
         }))
         .manage(AppState::new())
+        .plugin(tauri_plugin_notification::init())
         .setup(move |app| {
             ui::create_tray(app.handle())?;
             dispatch(app.handle(), cmd);
@@ -60,6 +65,16 @@ fn main() {
     });
 }
 
-pub fn dispatch(_app: &AppHandle, cmd: cli::Cmd) {
+pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
     eprintln!("rshot: dispatch {cmd:?}");
+    use cli::Cmd::*;
+    let result = match cmd {
+        Daemon | RestoreShortcuts => Ok(()),
+        CaptureArea => pipeline::capture_screen_now(app), // Task 5 switches this to the overlay
+        CaptureScreen => pipeline::capture_screen_now(app),
+        CaptureWindow => pipeline::capture_window_now(app),
+    };
+    if let Err(e) = result {
+        pipeline::notify(app, &e);
+    }
 }

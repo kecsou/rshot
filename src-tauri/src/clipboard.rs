@@ -62,6 +62,11 @@ pub fn file_uri(path: &Path) -> String {
     s
 }
 
+// ponytail: 15 MB image/png ceiling, since clipboard-rs lacks X11 INCR and a bigger property kills
+// its serving thread; add INCR or a chunked writer if huge captures must paste as images.
+#[cfg(target_os = "linux")]
+const MAX_X11_PNG: usize = 15 * 1024 * 1024;
+
 /// X11 targets rshot serves, in order.
 #[cfg(target_os = "linux")]
 pub fn linux_formats(path: &Path, png: Option<&[u8]>) -> Vec<(&'static str, Vec<u8>)> {
@@ -74,7 +79,7 @@ pub fn linux_formats(path: &Path, png: Option<&[u8]>) -> Vec<(&'static str, Vec<
         ("text/uri-list", format!("{uri}\r\n").into_bytes()),
         ("x-special/gnome-copied-files", format!("copy\n{uri}").into_bytes()),
     ];
-    if let Some(p) = png {
+    if let Some(p) = png.filter(|p| p.len() <= MAX_X11_PNG) {
         v.push(("image/png", p.to_vec()));
     }
     v
@@ -146,6 +151,14 @@ mod tests {
         assert_eq!(get("x-special/gnome-copied-files"), b"copy\nfile:///tmp/s.png");
         assert_eq!(get("image/png"), b"PNG");
         assert!(linux_formats(p, None).iter().all(|(n, _)| *n != "image/png"));
+    }
+
+    #[test]
+    fn oversized_png_is_dropped_but_path_targets_remain() {
+        let f = linux_formats(Path::new("/tmp/s.png"), Some(&vec![0u8; MAX_X11_PNG + 1]));
+        let names: Vec<&str> = f.iter().map(|(n, _)| *n).collect();
+        assert!(!names.contains(&"image/png"));
+        assert!(names.contains(&"UTF8_STRING") && names.contains(&"text/uri-list"));
     }
 
     #[test]

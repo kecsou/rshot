@@ -17,3 +17,9 @@ toml = "1"
 dirs = "7"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clipboard-rs = "0.3"
+xcap = "0.9"
+tauri-plugin-notification = "2.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.14", features = ["xfixes"] }
