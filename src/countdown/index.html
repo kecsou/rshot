@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>rshot countdown</title>
+    <style>
+      html, body { height: 100%; overflow: hidden; }
+      body { display: grid; place-items: center; }
+      #ring { position: relative; width: 108px; height: 108px; border-radius: 50%; display: grid; place-items: center; font: 600 50px Inter; }
+      #ring svg { position: absolute; inset: -2px; width: 112px; height: 112px; transform: rotate(-90deg); }
+      #ring circle { fill: none; stroke-width: 3; }
+      #ring .track { stroke: rgba(255, 255, 255, 0.18); }
+      #arc { stroke: var(--accent); stroke-linecap: round; }
+      #esc { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font: 500 11px Inter; white-space: nowrap; padding: 3px 9px; border-radius: 6px; background: rgba(40, 40, 46, 0.8); }
+    </style>
+  </head>
+  <body>
+    <div id="ring" class="glass"><svg viewBox="0 0 112 112"><circle class="track" cx="56" cy="56" r="54" /><circle id="arc" cx="56" cy="56" r="54" /></svg><span id="num"></span></div>
+    <small id="esc">Esc or click to cancel</small>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

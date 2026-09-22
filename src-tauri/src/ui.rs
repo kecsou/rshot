@@ -10,6 +10,9 @@ use crate::{capture::Frame, cli::Cmd, err};
 use std::time::Duration;
 use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
+#[cfg(target_os = "linux")]
+use gtk::prelude::*;
+
 pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     let item = |id: &str, text: &str| MenuItem::with_id(app, id, text, true, None::<&str>);
     let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
@@ -106,15 +109,92 @@ pub fn hide_overlays(app: &AppHandle) {
 pub fn force_focus(w: &WebviewWindow) {
     let w2 = w.clone();
     let _ = w.run_on_main_thread(move || {
-        use gtk::prelude::*;
         if let Ok(gw) = w2.gtk_window() {
-            if let Some(gdk) = gw.window() {
-                if let Ok(x11) = gdk.downcast::<gdkx11::X11Window>() {
-                    let t = gdkx11::functions::x11_get_server_time(&x11);
-                    x11.set_user_time(t);
-                    gw.present_with_time(t);
-                }
-            }
+            present_now(gw.upcast_ref());
         }
     });
+}
+
+#[cfg(target_os = "linux")]
+fn present_now(gw: &gtk::Window) {
+    if let Some(gdk) = gw.window() {
+        if let Ok(x11) = gdk.downcast::<gdkx11::X11Window>() {
+            let t = gdkx11::functions::x11_get_server_time(&x11);
+            x11.set_user_time(t);
+            gw.present_with_time(t);
+        }
+    }
+}
+
+/// rfd's GTK3 file dialogs ignore set_parent, and Mutter won't focus a new window that isn't a
+/// transient of the focused one while an always-on-top overlay is up. So once the dialog shows,
+/// make it the overlay's transient and focus it.
+#[cfg(target_os = "linux")]
+pub fn adopt_file_dialog(parent: &WebviewWindow) {
+    let p = parent.clone();
+    let _ = parent.run_on_main_thread(move || {
+        let Ok(pw) = p.gtk_window() else { return };
+        let mut tries = 0;
+        gtk::glib::timeout_add_local(Duration::from_millis(50), move || {
+            tries += 1;
+            let dialog = gtk::Window::list_toplevels()
+                .into_iter()
+                .filter_map(|w| w.downcast::<gtk::FileChooserDialog>().ok())
+                .find(|d| d.is_visible());
+            if let Some(d) = &dialog {
+                d.set_transient_for(Some(&pw));
+                present_now(d.upcast_ref());
+            }
+            if dialog.is_some() || tries >= 60 {
+                gtk::glib::ControlFlow::Break
+            } else {
+                gtk::glib::ControlFlow::Continue
+            }
+        });
+    });
+}
+
+static POPUP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub fn close_prefix(app: &AppHandle, prefix: &str) {
+    for (label, w) in app.webview_windows() {
+        if label.starts_with(&format!("{prefix}-")) {
+            let _ = w.destroy();
+        }
+    }
+}
+
+/// A small undecorated, transparent, always-on-top window (thumbnail, countdown).
+pub fn popup(app: &AppHandle, prefix: &str, page: &str, w: f64, h: f64, focused: bool) -> Result<WebviewWindow, String> {
+    close_prefix(app, prefix);
+    let n = POPUP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    WebviewWindowBuilder::new(app, format!("{prefix}-{n}"), WebviewUrl::App(page.into()))
+        .title("rshot")
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .focused(focused)
+        .visible(false)
+        .inner_size(w, h)
+        .build()
+        .map_err(err)
+}
+
+fn monitor_at(app: &AppHandle, x: f64, y: f64) -> Result<tauri::Monitor, String> {
+    app.monitor_from_point(x, y)
+        .map_err(err)?
+        .or(app.primary_monitor().map_err(err)?)
+        .ok_or_else(|| "no monitor".to_string())
+}
+
+/// Countdown ring centred on a desktop point (physical pixels).
+pub fn show_countdown(app: &AppHandle, (cx, cy): (i32, i32)) -> Result<(), String> {
+    let s = monitor_at(app, cx.into(), cy.into())?.scale_factor();
+    let (w, h) = (160.0, 180.0);
+    let win = popup(app, "countdown", "countdown/index.html", w, h, true)?;
+    win.set_position(PhysicalPosition::new(cx - (w * s / 2.0) as i32, cy - (h * s / 2.0) as i32)).map_err(err)?;
+    win.show().map_err(err)?;
+    win.set_focus().map_err(err)
 }

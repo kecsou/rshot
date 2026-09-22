@@ -207,6 +207,18 @@ fn capture_from(app: &AppHandle, session: Session, index: usize, target: Target)
     if let Target::Area { rect } = target {
         remember(app, &frame.name, rect);
     }
+    let secs = app.state::<AppState>().config.lock().unwrap().timer_secs;
+    if secs > 0 {
+        let (fw, fh) = frame.image.dimensions();
+        let center = match target {
+            Target::Area { rect } | Target::Window { rect, .. } => {
+                (frame.x + (rect.x + rect.w / 2.0) as i32, frame.y + (rect.y + rect.h / 2.0) as i32)
+            }
+            Target::Screen => (frame.x + (fw / 2) as i32, frame.y + (fh / 2) as i32),
+        };
+        *app.state::<AppState>().pending.lock().unwrap() = Some(Pending { monitor: frame.name, target, secs });
+        return ui::show_countdown(app, center);
+    }
     let (w, h) = frame.image.dimensions();
     let clamp = |r: Rect| capture::clamp_rect(r.x, r.y, r.w, r.h, w, h).ok_or_else(|| "empty selection".to_string());
     let img = match target {
@@ -217,6 +229,84 @@ fn capture_from(app: &AppHandle, session: Session, index: usize, target: Target)
             Ok(img) => img,
             Err(_) => capture::crop(&frame.image, clamp(rect)?),
         },
+    };
+    pipeline::finish_capture(app, img).map(|_| ())
+}
+
+/// A timed capture waiting for its countdown.
+pub struct Pending {
+    pub monitor: String,
+    pub target: Target,
+    pub secs: u8,
+}
+
+#[tauri::command]
+pub fn set_overlay_options(state: State<'_, AppState>, options: OverlayOptions) -> Result<(), String> {
+    let mut c = state.config.lock().unwrap();
+    c.timer_secs = options.timer_secs;
+    c.show_thumbnail = options.show_thumbnail;
+    c.remember_selection = options.remember_selection;
+    c.show_pointer = options.show_pointer;
+    c.screenshots_dir = store::dir_setting(&options.screenshots_dir);
+    store::save_config(&c).map_err(err)
+}
+
+#[tauri::command]
+pub async fn pick_folder(app: AppHandle, window: WebviewWindow) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    #[cfg(target_os = "linux")]
+    ui::adopt_file_dialog(&window);
+    app.dialog()
+        .file()
+        .set_parent(&window)
+        .blocking_pick_folder()
+        .and_then(|p| p.into_path().ok())
+        .map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+pub fn countdown_info(state: State<'_, AppState>) -> u8 {
+    state.pending.lock().unwrap().as_ref().map_or(0, |p| p.secs)
+}
+
+#[tauri::command]
+pub async fn countdown_done(app: AppHandle) -> Result<(), String> {
+    let pending = app.state::<AppState>().pending.lock().unwrap().take();
+    ui::close_prefix(&app, "countdown");
+    let Some(p) = pending else { return Ok(()) };
+    std::thread::sleep(std::time::Duration::from_millis(200)); // let the compositor drop the ring
+    let result = run_pending(&app, p);
+    if let Err(e) = &result {
+        pipeline::notify(&app, e);
+    }
+    result
+}
+
+#[tauri::command]
+pub fn countdown_cancel(app: AppHandle, state: State<'_, AppState>) {
+    state.pending.lock().unwrap().take();
+    ui::close_prefix(&app, "countdown");
+}
+
+/// After the countdown: grab the live screen again and cut the same target.
+fn run_pending(app: &AppHandle, p: Pending) -> Result<(), String> {
+    let img = match p.target {
+        Target::Window { id, .. } => capture::window_image(id)?,
+        target => {
+            let show_pointer = app.state::<AppState>().config.lock().unwrap().show_pointer;
+            let f = capture::grab_all(show_pointer)?
+                .into_iter()
+                .find(|f| f.name == p.monitor)
+                .ok_or("that monitor is gone")?;
+            match target {
+                Target::Area { rect } => capture::crop(
+                    &f.image,
+                    capture::clamp_rect(rect.x, rect.y, rect.w, rect.h, f.image.width(), f.image.height())
+                        .ok_or("empty selection")?,
+                ),
+                _ => f.image,
+            }
+        }
     };
     pipeline::finish_capture(app, img).map(|_| ())
 }

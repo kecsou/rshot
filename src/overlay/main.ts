@@ -3,13 +3,8 @@ import './overlay.css';
 import { emit, listen } from '@tauri-apps/api/event';
 import { mountIcons } from '../shared/icons';
 import * as ipc from '../shared/ipc';
+import { closeOptions, optionsOpen, renderOptions, toggleOptions } from './options';
 import { type Handle, type Rect, clamp, fromPoints, handleAt, move, resize, windowAt } from './selection';
-
-// Options popover arrives in Task 8.
-const optionsOpen = () => false;
-const closeOptions = () => {};
-const toggleOptions = () => {};
-const renderOptions = (_o: ipc.OverlayOptions) => {};
 
 mountIcons();
 
@@ -119,7 +114,7 @@ function render() {
 }
 
 function renderLoupe() {
-  const show = !!info && !!pixels && !!pointer && info.active && mode === 'area' && drag?.kind !== 'move';
+  const show = !!info && !!pixels && !!pointer && info.active && mode === 'area' && drag?.kind !== 'move' && !optionsOpen();
   loupe.hidden = coord.hidden = !show;
   if (!show || !info || !pixels || !pointer) return;
   const x = Math.min(info.width - 1, Math.max(0, Math.floor(pointer[0])));

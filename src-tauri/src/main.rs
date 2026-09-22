@@ -21,6 +21,7 @@ pub struct AppState {
     pub last_capture: std::sync::Mutex<Option<std::path::PathBuf>>,
     pub session: std::sync::Mutex<Option<overlay::Session>>,
     pub next_token: std::sync::atomic::AtomicU64,
+    pub pending: std::sync::Mutex<Option<overlay::Pending>>,
 }
 
 impl AppState {
@@ -31,6 +32,7 @@ impl AppState {
             last_capture: std::sync::Mutex::new(None),
             session: std::sync::Mutex::new(None),
             next_token: std::sync::atomic::AtomicU64::new(1),
+            pending: std::sync::Mutex::new(None),
         }
     }
 }
@@ -71,6 +73,7 @@ fn main() {
         }))
         .manage(AppState::new())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             overlay::overlay_info,
             overlay::overlay_frame,
@@ -78,6 +81,11 @@ fn main() {
             overlay::overlay_activate,
             overlay::overlay_cancel,
             overlay::overlay_capture,
+            overlay::set_overlay_options,
+            overlay::pick_folder,
+            overlay::countdown_info,
+            overlay::countdown_done,
+            overlay::countdown_cancel,
         ])
         .setup(move |app| {
             ui::create_tray(app.handle())?;

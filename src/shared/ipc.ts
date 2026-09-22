@@ -30,3 +30,5 @@ export const overlayReady = (token: number) => invoke<void>('overlay_ready', { t
 export const overlayActivate = (token: number) => invoke<void>('overlay_activate', { token });
 export const overlayCancel = () => invoke<void>('overlay_cancel');
 export const overlayCapture = (token: number, target: Target) => invoke<void>('overlay_capture', { token, target });
+export const setOverlayOptions = (options: OverlayOptions) => invoke<void>('set_overlay_options', { options });
+export const pickFolder = () => invoke<string | null>('pick_folder');

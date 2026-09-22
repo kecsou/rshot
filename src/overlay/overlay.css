@@ -39,9 +39,9 @@ body[data-mode='window'], body[data-mode='screen'] { cursor: pointer; }
 #bar .opt:hover, #bar .opt.on { background: rgba(255, 255, 255, 0.17); }
 #bar .b1 { margin-left: 4px; }
 
-#pop { position: fixed; left: 50%; bottom: calc(4.5vh + 52px); transform: translateX(-50%); width: 430px; padding: 14px; border-radius: 14px; font: 500 12px Inter; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; background: var(--glass-strong); }
+#pop { position: fixed; left: 50%; bottom: calc(4.5vh + 52px); transform: translateX(-50%); width: 430px; padding: 14px; border-radius: 14px; font: 500 12px Inter; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 18px; background: var(--glass-strong); }
 #pop .full { grid-column: 1 / -1; height: 1px; background: rgba(255, 255, 255, 0.1); margin: -4px 0; }
 #pop .field { width: 100%; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border-radius: 7px; background: var(--fill); border: 1px solid var(--fill); }
 #pop .field .grow { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
-#pop .toggles { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+#pop .toggles { grid-column: 1; }
 #pop .tog { display: flex; align-items: center; justify-content: space-between; height: 26px; gap: 10px; }
