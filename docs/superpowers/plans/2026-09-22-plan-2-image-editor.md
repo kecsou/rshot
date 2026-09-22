@@ -68,9 +68,14 @@ vite.config.ts                     # + 'editor' page
   - `ui::open_editor(&AppHandle, &Path) -> Result<(), String>` and `AppState.editors: Mutex<HashMap<String, PathBuf>>`.
   - TS: `ipc.openEditor`, `ipc.editorInfo`, `ipc.saveImage(Uint8Array)`, `ipc.editorDelete`, `ipc.copyPath` and `type EditorInfo`.
 
-- [ ] **Step 1: Make the path guard reusable and drop the default-viewer command**
+- [ ] **Step 1: Make the path guard reusable, let it accept open editor files, and drop the default-viewer command**
 
-In `src-tauri/src/thumbnail.rs`, change `fn guard(` to `pub(crate) fn guard(`. Delete the `open_capture` command, and remove it from `generate_handler!` in `main.rs` and from `src/shared/ipc.ts` (`openCapture`).
+Plan 1's `thumbnail::guard` accepts only the canonicalized **last capture**. It goes through a pure `allowed(p, last)` helper, a security ruling from Plan 1 Task 9. Editors must keep working after another capture replaces "last". So:
+- make `guard` `pub(crate)`;
+- extend it to also accept a path currently open in an editor window. Before the final `Err`, check `state.editors.lock().unwrap().values().any(|e| e.canonicalize().ok().as_deref() == Some(p.as_path()))`. `AppState.editors` is added in Step 4, so do this edit after Step 4 compiles;
+- add a unit test that covers "open in an editor ⇒ allowed" by extending the pure helper (e.g. `allowed(p, last, open: &[PathBuf])`).
+
+Delete the `open_capture` command, and remove it from `generate_handler!` in `main.rs` and from `src/shared/ipc.ts` (`openCapture`).
 
 - [ ] **Step 2: Write `src-tauri/src/editor.rs`**
 
