@@ -35,7 +35,7 @@ save; custom file-name patterns; selections spanning two monitors; code signing/
 | Overlay with toolbar (area mode) | `Print` | `PrtScn`, `Win+Shift+S` | `⌘⇧4`, `⌘⇧5` |
 | Full screen, immediate | `Shift+Print` | `Win+PrtScn` | `⌘⇧3` |
 | Active window, immediate | `Alt+Print` | `Alt+PrtScn` | — (`Space` in overlay) |
-| Overlay in record mode / stop recording | `Ctrl+Alt+Shift+R` | `Win+Shift+R` | — (toolbar) |
+| Overlay in record mode / stop recording | `Ctrl+Alt+Shift+R` (taken over from Plan 3) | `Win+Shift+R` | — (toolbar) |
 
 On macOS the Ctrl variants (`⌃⌘⇧3`, `⌃⌘⇧4`) map to the same actions. Shortcuts are
 rebindable in Settings. "Full screen" means the monitor under the cursor. "Active window"
@@ -53,7 +53,10 @@ means the focused window.
   label). Click captures that window.
 - Options popover: save folder, timer (off/3/5/10 s), show thumbnail, remember last selection,
   show mouse pointer, microphone. Choices persist to config.
-- Timer: toolbar hides; countdown ring inside the selection; `Esc` cancels.
+- Timer: the overlay hides. A countdown ring sits at the centre of the selection on the
+  **live** screen, so you can open a menu or hover state during the countdown. When it ends,
+  rshot grabs a fresh image of the same region, window or screen. `Esc` or a click cancels.
+  (This departs from mockup 2d, where the ring sat over the dimmed frozen screen.)
 - Hint bar (drag / Space / ⏎ / Esc) shows for the first 5 overlay openings, then never.
 
 ### 2.3 After a capture
@@ -177,16 +180,19 @@ the editor. Dragging it drops the file into other apps. Swiping it right dismiss
 | `shortcuts/mod.rs` + `gnome.rs` / `windows.rs` / `macos.rs` | take over / restore / rebind; backup of the originals kept in config | per-OS |
 | `recorder.rs` | build ffmpeg args per OS, spawn, stop (`q` on stdin), remux, list mics, trim | ffmpeg process |
 | `ui.rs` | create, show and hide windows (overlay per monitor, thumbnail, editors, pill, settings, onboarding); position on the active monitor | tauri |
-| `commands.rs` | `#[tauri::command]` surface used by the frontend | the above |
+| `pipeline.rs` | finish a capture: PNG, atomic write, clipboard, sound, thumbnail; immediate captures; notifications | capture, store, clipboard, ui |
+| `overlay.rs` | overlay session, frame IPC, capture targets, timer countdown | capture, pipeline, ui |
+| `thumbnail.rs` / `settings.rs` | commands for the thumbnail, settings and onboarding windows | store, shortcuts, clipboard |
 
 Pure logic (naming, crop math, gsettings list edits, ffmpeg args, clipboard payload, config
 defaults) lives in plain functions with no I/O, so it can be unit-tested.
 
 ### 3.4 Frontend (`src/`)
 `overlay/`, `thumbnail/`, `editor/` (canvas + object model), `video/`, `pill/`, `settings/`,
-`onboarding/`, and `shared/` (`glass.css`, `icons.svg`, `ipc.ts`). Frozen frames reach the
-overlay through a custom URI scheme (`rshot://frame/<monitor>`) served from memory. They
-never touch disk.
+`countdown/`, `onboarding/`, and `shared/` (`glass.css`, `icons.ts`, `ipc.ts`). Frozen
+frames reach the overlay as raw RGBA bytes through a binary IPC response
+(`tauri::ipc::Response`). They never touch disk, and the canvas stays same-origin, so the
+magnifier can read pixel colours.
 
 ### 3.5 Main flows
 - **Screenshot:** trigger → `capture::grab_all()` → emit `overlay:show` → the overlay loads its
@@ -265,8 +271,9 @@ source link in `THIRD_PARTY.md`.
   - ffmpeg args per OS (plus trim and remux);
   - clipboard payload (uri-list, gnome-copied-files);
   - config defaults and round-trip.
-- Frontend: `vitest` for the editor object model (hit testing, transforms, undo/redo, counter
-  numbering, export order). This is the only frontend test suite.
+- Frontend: `vitest` for the pure modules only. These are the overlay selection geometry,
+  shortcut-combo parsing, and the editor object model (hit testing, transforms, undo/redo,
+  counter numbering, export order).
 - Manual checklist on Ubuntu X11:
   - every shortcut, 2 monitors, HiDPI (scale 2);
   - pasting into gnome-terminal (path), Chrome/Slack (image) and Nautilus (file);
