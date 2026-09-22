@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>rshot mockup: visual direction (A chosen)</title>
+<style>
+:root{--bg-primary:#f5f5f7;--bg-secondary:#fff;--bg-tertiary:#e5e5e7;--border:#d1d1d6;--text-primary:#1d1d1f;--text-secondary:#86868b;--selected-border:#0071e3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);padding:2rem;line-height:1.5}
+h2{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}h3{font-size:1.1rem;font-weight:600;margin-bottom:.25rem}
+.subtitle{color:var(--text-secondary);margin-bottom:1.5rem;max-width:1100px}
+.card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+</style></head><body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Cantarell:wght@400;700&display=swap');
+
+/* ---------- icon sprite ---------- */
+.ic{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ic.sm{width:13px;height:13px}
+
+/* ---------- fake desktop ---------- */
+.desk{position:relative;aspect-ratio:16/9;max-width:1100px;border-radius:10px;overflow:hidden;font-family:Inter,system-ui;
+  background:radial-gradient(110% 90% at 85% 5%,#7a2f6b 0%,transparent 55%),radial-gradient(90% 80% at 5% 105%,#e95420 0%,transparent 55%),#2c001e}
+.topbar{position:absolute;inset:0 0 auto 0;height:3.4%;background:#000;color:#eee;font:500 10px Inter;display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:1}
+.dock{position:absolute;left:0;top:3.4%;bottom:0;width:4.2%;background:rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;gap:6%;padding-top:1.2%;z-index:1}
+.dock i{width:62%;aspect-ratio:1;border-radius:22%;display:block}
+.win{position:absolute;border-radius:8px;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.5)}
+.tb{height:5.5%;min-height:18px;background:#2b2b2b;color:#aaa;font:500 10px Inter;display:flex;align-items:center;justify-content:center;position:relative}
+.tb::after{content:'';position:absolute;right:10px;width:9px;height:9px;border-radius:50%;background:#555;box-shadow:-14px 0 0 #555,-28px 0 0 #555}
+.code{left:5.5%;top:8%;width:52%;height:80%;background:#1e1e1e;z-index:2}
+.code .body{padding:3% 4%}
+.ln{display:flex;gap:6px;height:7px;margin:0 0 9px 0}
+.ln b{display:block;height:100%;border-radius:3px}
+.k{background:#569cd6}.v{background:#9cdcfe}.s{background:#ce9178}.c{background:#6a9955}.t{background:#d4d4d4}.f{background:#dcdcaa}.y{background:#4ec9b0}
+.browser{left:46%;top:14%;width:50%;height:76%;background:#fff;z-index:3}
+.tabs{height:6%;background:#dee1e6}
+.url{height:7%;background:#fff;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;padding:0 3%}
+.url span{height:55%;flex:1;border-radius:20px;background:#f1f3f4}
+.pg{position:absolute;background:#e9e9ee;border-radius:3px}
+.chart{position:absolute;left:55%;top:38%;width:32%;height:34%;background:#fff;border:1px solid #e6e6ea;border-radius:8px;z-index:4;padding:1.2% 1.5%;box-sizing:border-box;display:flex;flex-direction:column;font-family:Inter}
+.chart .t1{font:500 10px Inter;color:#6b6b76}
+.chart .t2{font:700 19px Inter;color:#18181b;margin-top:2px}
+.chart .t2 em{font:600 10px Inter;color:#16a34a;font-style:normal;margin-left:6px}
+.bars{flex:1;display:flex;align-items:flex-end;gap:5%;margin-top:6%}
+.bars i{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(#8b7bff,#5b4cf0);display:block}
+
+/* selection (shared geometry) */
+.sel{position:absolute;left:54%;top:35.5%;width:34%;height:39.5%;z-index:5}
+.cursor{position:absolute;left:87.6%;top:74.6%;z-index:9;width:16px;height:16px}
+.bar{position:absolute;left:50%;bottom:4.5%;transform:translateX(-50%);z-index:10;display:flex;align-items:center;white-space:nowrap}
+
+/* after-capture corner */
+.corner{position:relative;height:230px;max-width:1100px;border-radius:10px;overflow:hidden;margin-top:14px;
+  background:radial-gradient(90% 140% at 0% 110%,#e95420 0%,transparent 55%),radial-gradient(80% 100% at 100% 0%,#7a2f6b 0%,transparent 60%),#2c001e}
+.corner .code{left:3%;top:-10%;width:60%;height:130%}
+.shot{position:relative;background:#fff;overflow:hidden}
+.shot .chart{position:absolute;inset:6%;width:auto;height:auto;left:6%;top:6%;border-radius:5px}
+.shot .chart .t1{font-size:7px}.shot .chart .t2{font-size:12px}.shot .chart .t2 em{font-size:7px}
+
+.dir{margin-bottom:34px;padding:16px}
+.dir h3{display:flex;align-items:center;gap:10px}
+.dir .tag{font:600 10px Inter;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary)}
+.dir p.note{color:var(--text-secondary);font-size:.85rem;margin:2px 0 12px}
+.cap{font:600 10px Inter;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 0}
+
+/* ========== A · GLASS ========== */
+.A .sel{border:1.5px solid rgba(255,255,255,.95);box-shadow:0 0 0 200vmax rgba(0,0,0,.5)}
+.A .h{position:absolute;width:9px;height:9px;background:#fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
+.A .dim{position:absolute;top:calc(100% + 8px);right:0;background:rgba(30,30,34,.78);backdrop-filter:blur(12px);color:#fff;font:500 11px Inter;padding:3px 8px;border-radius:6px}
+.A .bar{gap:2px;padding:6px;border-radius:14px;background:rgba(40,40,46,.66);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.12);box-shadow:0 14px 44px rgba(0,0,0,.5);color:#f2f2f7;font-family:Inter}
+.A .btn{width:36px;height:30px;display:grid;place-items:center;border-radius:8px;color:#d9d9e0}
+.A .btn.on{background:rgba(255,255,255,.17);color:#fff}
+.A .sep{width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 6px}
+.A .opt{font:500 12px Inter;padding:0 10px;height:30px;display:flex;align-items:center;gap:5px;border-radius:8px;color:#e5e5ea}
+.A .go{background:#0a84ff;color:#fff;font:600 12px Inter;padding:0 16px;height:30px;border-radius:8px;display:flex;align-items:center;margin-left:4px}
+.A .thumb{position:absolute;right:18px;bottom:18px;width:230px;border-radius:12px;overflow:hidden;background:rgba(40,40,46,.7);backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.14);box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:5}
+.A .thumb .shot{height:132px}
+.A .thumb .acts{position:absolute;top:8px;right:8px;display:flex;gap:4px;z-index:6}
+.A .thumb .acts span{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;background:rgba(20,20,24,.72);backdrop-filter:blur(10px);color:#fff}
+.A .thumb .foot{display:flex;align-items:center;gap:7px;padding:8px 10px;font:500 11px Inter;color:#fff}
+.A .thumb .foot .ok{width:16px;height:16px;border-radius:50%;background:#30d158;display:grid;place-items:center;color:#062;flex-shrink:0}
+.A .thumb .foot small{display:block;color:rgba(255,255,255,.55);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ========== B · ADWAITA ========== */
+.B .sel{border:2px solid #fff;box-shadow:0 0 0 200vmax rgba(0,0,0,.45)}
+.B .h{position:absolute;width:15px;height:15px;background:#fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.B .dim{position:absolute;bottom:8px;right:8px;background:#303030;color:#fff;font:700 11px Cantarell,Inter;padding:3px 9px;border-radius:99px}
+.B .bar{gap:8px;padding:10px 12px;border-radius:18px;background:#303030;box-shadow:0 2px 16px rgba(0,0,0,.55);color:#fff;font-family:Cantarell,Inter}
+.B .grp{display:flex;gap:4px;background:rgba(255,255,255,.07);border-radius:11px;padding:3px}
+.B .btn{height:36px;padding:0 12px;display:flex;align-items:center;gap:6px;border-radius:9px;color:#fff;font:700 11px Cantarell,Inter}
+.B .btn.on{background:rgba(255,255,255,.2)}
+.B .shutter{width:46px;height:46px;border-radius:50%;border:3px solid #fff;display:grid;place-items:center;margin:0 6px}
+.B .shutter i{width:34px;height:34px;border-radius:50%;background:#fff;display:block}
+.B .round{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1)}
+.B .x{position:absolute;top:6%;right:2%;z-index:10;width:32px;height:32px;border-radius:50%;background:#303030;color:#fff;display:grid;place-items:center}
+.B .thumb{position:absolute;right:18px;bottom:18px;width:300px;border-radius:14px;overflow:hidden;background:#303030;box-shadow:0 6px 28px rgba(0,0,0,.6);z-index:5;display:flex;gap:10px;padding:10px;font-family:Cantarell,Inter;color:#fff}
+.B .thumb .shot{width:108px;height:72px;border-radius:8px;flex-shrink:0}
+.B .thumb .txt{min-width:0;display:flex;flex-direction:column;justify-content:space-between}
+.B .thumb b{font:700 12px Cantarell,Inter}
+.B .thumb small{display:block;color:rgba(255,255,255,.6);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.B .thumb .btns{display:flex;gap:6px}
+.B .thumb .btns span{font:700 10.5px Cantarell,Inter;background:rgba(255,255,255,.1);padding:5px 10px;border-radius:7px}
+.B .thumb .btns span.p{background:#3584e4}
+
+/* ========== C · SIGNAL ========== */
+.C .sel{outline:1px solid rgba(198,255,61,.9);box-shadow:0 0 0 200vmax rgba(8,9,12,.64)}
+.C .br{position:absolute;width:14px;height:14px;border:0 solid #c6ff3d}
+.C .br.tl{left:-4px;top:-4px;border-width:3px 0 0 3px}.C .br.tr{right:-4px;top:-4px;border-width:3px 3px 0 0}
+.C .br.bl{left:-4px;bottom:-4px;border-width:0 0 3px 3px}.C .br.brr{right:-4px;bottom:-4px;border-width:0 3px 3px 0}
+.C .dim{position:absolute;bottom:calc(100% + 8px);left:-4px;background:#c6ff3d;color:#0b0c0f;font:600 10.5px 'JetBrains Mono';padding:2px 7px;border-radius:4px}
+.C .dim span{opacity:.55;margin-left:8px}
+.C .guide{position:absolute;z-index:5;background:rgba(198,255,61,.35)}
+.C .bar{gap:3px;padding:5px;border-radius:10px;background:#0e0f13;border:1px solid #272b34;box-shadow:0 16px 44px rgba(0,0,0,.6);color:#b9bdc7;font:500 11.5px 'JetBrains Mono'}
+.C .btn{height:30px;padding:0 9px;display:flex;align-items:center;gap:6px;border-radius:6px}
+.C .btn.on{background:#1b1f27;color:#c6ff3d;box-shadow:inset 0 0 0 1px #2f3542}
+.C .sep{width:1px;height:18px;background:#272b34;margin:0 5px}
+.C kbd{font:500 9.5px 'JetBrains Mono';color:#6f7582;border:1px solid #2f3542;border-bottom-width:2px;border-radius:4px;padding:0 4px;line-height:14px}
+.C .go{background:#c6ff3d;color:#0b0c0f;font:600 11.5px 'JetBrains Mono';height:30px;padding:0 10px;border-radius:6px;display:flex;align-items:center;gap:8px;margin-left:4px}
+.C .go kbd{color:#0b0c0f;border-color:rgba(11,12,15,.35)}
+.C .thumb{position:absolute;right:18px;bottom:18px;width:330px;border-radius:10px;overflow:hidden;background:#0e0f13;border:1px solid #272b34;box-shadow:0 18px 50px rgba(0,0,0,.6);z-index:5;font-family:'JetBrains Mono'}
+.C .thumb .shot{height:120px}
+.C .thumb .path{padding:8px 10px;border-top:1px solid #272b34;font:500 10.5px 'JetBrains Mono';color:#d6d9e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.C .thumb .path i{color:#6f7582;font-style:normal}
+.C .thumb .row{display:flex;align-items:center;justify-content:space-between;padding:0 10px 8px;font:500 10px 'JetBrains Mono'}
+.C .thumb .row .ok{color:#c6ff3d}
+.C .thumb .row .keys{display:flex;gap:10px;color:#6f7582}
+</style>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></symbol>
+  <symbol id="i-area" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/></symbol>
+  <symbol id="i-recscreen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><circle cx="12" cy="10" r="2.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-recarea" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/></symbol>
+  <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M5 3l14 7-6 2-2 6z"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M5 3l14 7-6 2-2 6z" fill="#fff" stroke="#000" stroke-width="1.4"/></symbol>
+</svg>
+
+<h2>1 · Visual direction</h2>
+<p class="subtitle">The same moment (you pressed <b>Print</b> and are dragging an area) in three styles, plus the thumbnail that appears after the capture. Click the one that feels right. I'll then mock up every screen in that style.</p>
+
+<!-- ======================= A ======================= -->
+<div class="card dir A" data-choice="A-glass" onclick="toggleSelect(this)">
+  <h3>A · Glass <span class="tag">macOS-like · translucent · calm</span></h3>
+  <p class="note">Frosted translucent toolbar, round white handles, blue accent. Looks at home on all three OSes and stays out of the way.</p>
+  <div class="desk">
+    <div class="topbar"><span>Activities</span><span>Tue 22 Sep&nbsp; 20:41</span><span>● ● ●</span></div>
+    <div class="dock"><i style="background:#e95420"></i><i style="background:#3584e4"></i><i style="background:#2ec27e"></i><i style="background:#f6d32d"></i><i style="background:#9141ac"></i></div>
+    <div class="win code"><div class="tb">main.rs — rshot</div><div class="body">
+      <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:14%"></b><b class="t" style="width:4%"></b></div>
+      <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:22%"></b></div>
+      <div class="ln"></div>
+      <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:12%"></b><b class="t" style="width:10%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="k" style="width:6%"></b><b class="v" style="width:12%"></b><b class="t" style="width:4%"></b><b class="f" style="width:18%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="c" style="width:40%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="v" style="width:9%"></b><b class="f" style="width:14%"></b><b class="s" style="width:26%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="k" style="width:4%"></b><b class="v" style="width:10%"></b><b class="t" style="width:3%"></b></div>
+      <div class="ln" style="margin-left:10%"><b class="f" style="width:16%"></b><b class="v" style="width:8%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="t" style="width:3%"></b></div>
+      <div class="ln"><b class="t" style="width:3%"></b></div>
+      <div class="ln"></div>
+      <div class="ln"><b class="c" style="width:30%"></b></div>
+      <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:15%"></b><b class="t" style="width:14%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="v" style="width:12%"></b><b class="s" style="width:20%"></b></div>
+    </div></div>
+    <div class="win browser"><div class="tabs"></div><div class="url"><span></span></div>
+      <div class="pg" style="left:3%;top:18%;width:11%;height:3%"></div><div class="pg" style="left:3%;top:25%;width:9%;height:3%"></div><div class="pg" style="left:3%;top:32%;width:10%;height:3%"></div>
+      <div class="pg" style="left:18%;top:17%;width:40%;height:5%;background:#d7d7de"></div><div class="pg" style="left:18%;top:24%;width:28%;height:3%"></div>
+      <div class="pg" style="left:18%;top:81%;width:64%;height:3%"></div><div class="pg" style="left:18%;top:87%;width:50%;height:3%"></div>
+    </div>
+    <div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div>
+    <div class="sel">
+      <span class="h" style="left:-5px;top:-5px"></span><span class="h" style="left:calc(50% - 5px);top:-5px"></span><span class="h" style="right:-5px;top:-5px"></span>
+      <span class="h" style="left:-5px;top:calc(50% - 5px)"></span><span class="h" style="right:-5px;top:calc(50% - 5px)"></span>
+      <span class="h" style="left:-5px;bottom:-5px"></span><span class="h" style="left:calc(50% - 5px);bottom:-5px"></span><span class="h" style="right:-5px;bottom:-5px"></span>
+      <div class="dim">870 × 569</div>
+    </div>
+    <svg class="cursor"><use href="#i-cursor"/></svg>
+    <div class="bar">
+      <span class="btn"><svg class="ic"><use href="#i-x"/></svg></span><span class="sep"></span>
+      <span class="btn"><svg class="ic"><use href="#i-screen"/></svg></span>
+      <span class="btn"><svg class="ic"><use href="#i-window"/></svg></span>
+      <span class="btn on"><svg class="ic"><use href="#i-area"/></svg></span><span class="sep"></span>
+      <span class="btn"><svg class="ic"><use href="#i-recscreen"/></svg></span>
+      <span class="btn"><svg class="ic"><use href="#i-recarea"/></svg></span><span class="sep"></span>
+      <span class="opt">Options <svg class="ic sm"><use href="#i-down"/></svg></span>
+      <span class="go">Capture</span>
+    </div>
+  </div>
+  <div class="cap">After capture: bottom-right, fades after 5 s (hover state shown)</div>
+  <div class="corner">
+    <div class="win code"><div class="tb">main.rs — rshot</div></div>
+    <div class="thumb">
+      <div class="shot"><div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div></div>
+      <div class="acts"><span><svg class="ic sm"><use href="#i-pen"/></svg></span><span><svg class="ic sm"><use href="#i-folder"/></svg></span><span><svg class="ic sm"><use href="#i-trash"/></svg></span></div>
+      <div class="foot"><span class="ok"><svg class="ic sm" style="width:10px;height:10px;stroke-width:3"><use href="#i-check"/></svg></span><div style="min-width:0">Path copied<small>~/Pictures/Screenshots/Screenshot_2026-09-22_20-41-07.png</small></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= B ======================= -->
+<div class="card dir B" data-choice="B-adwaita" onclick="toggleSelect(this)">
+  <h3>B · Adwaita <span class="tag">GNOME-native · solid · familiar</span></h3>
+  <p class="note">Looks like Ubuntu's own screenshot UI: solid dark panel, big round shutter button, pill-shaped controls. Feels native on Ubuntu but a bit out of place on Windows and macOS.</p>
+  <div class="desk">
+    <div class="topbar"><span>Activities</span><span>Tue 22 Sep&nbsp; 20:41</span><span>● ● ●</span></div>
+    <div class="dock"><i style="background:#e95420"></i><i style="background:#3584e4"></i><i style="background:#2ec27e"></i><i style="background:#f6d32d"></i><i style="background:#9141ac"></i></div>
+    <div class="win code"><div class="tb">main.rs — rshot</div><div class="body">
+      <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:14%"></b><b class="t" style="width:4%"></b></div>
+      <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:22%"></b></div>
+      <div class="ln"></div>
+      <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:12%"></b><b class="t" style="width:10%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="k" style="width:6%"></b><b class="v" style="width:12%"></b><b class="t" style="width:4%"></b><b class="f" style="width:18%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="c" style="width:40%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="v" style="width:9%"></b><b class="f" style="width:14%"></b><b class="s" style="width:26%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="k" style="width:4%"></b><b class="v" style="width:10%"></b><b class="t" style="width:3%"></b></div>
+      <div class="ln" style="margin-left:10%"><b class="f" style="width:16%"></b><b class="v" style="width:8%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="t" style="width:3%"></b></div>
+      <div class="ln"><b class="t" style="width:3%"></b></div>
+      <div class="ln"></div>
+      <div class="ln"><b class="c" style="width:30%"></b></div>
+      <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:15%"></b><b class="t" style="width:14%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="v" style="width:12%"></b><b class="s" style="width:20%"></b></div>
+    </div></div>
+    <div class="win browser"><div class="tabs"></div><div class="url"><span></span></div>
+      <div class="pg" style="left:3%;top:18%;width:11%;height:3%"></div><div class="pg" style="left:3%;top:25%;width:9%;height:3%"></div><div class="pg" style="left:3%;top:32%;width:10%;height:3%"></div>
+      <div class="pg" style="left:18%;top:17%;width:40%;height:5%;background:#d7d7de"></div><div class="pg" style="left:18%;top:24%;width:28%;height:3%"></div>
+      <div class="pg" style="left:18%;top:81%;width:64%;height:3%"></div><div class="pg" style="left:18%;top:87%;width:50%;height:3%"></div>
+    </div>
+    <div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div>
+    <div class="sel">
+      <span class="h" style="left:-8px;top:-8px"></span><span class="h" style="right:-8px;top:-8px"></span>
+      <span class="h" style="left:-8px;bottom:-8px"></span><span class="h" style="right:-8px;bottom:-8px"></span>
+      <div class="dim">870 × 569</div>
+    </div>
+    <svg class="cursor"><use href="#i-cursor"/></svg>
+    <span class="x"><svg class="ic sm"><use href="#i-x"/></svg></span>
+    <div class="bar">
+      <div class="grp">
+        <span class="btn on"><svg class="ic"><use href="#i-area"/></svg>Selection</span>
+        <span class="btn"><svg class="ic"><use href="#i-screen"/></svg>Screen</span>
+        <span class="btn"><svg class="ic"><use href="#i-window"/></svg>Window</span>
+      </div>
+      <span class="shutter"><i></i></span>
+      <div class="grp">
+        <span class="btn on"><svg class="ic"><use href="#i-camera"/></svg></span>
+        <span class="btn"><svg class="ic"><use href="#i-video"/></svg></span>
+      </div>
+      <span class="round"><svg class="ic"><use href="#i-timer"/></svg></span>
+      <span class="round"><svg class="ic"><use href="#i-pointer"/></svg></span>
+    </div>
+  </div>
+  <div class="cap">After capture: bottom-right, fades after 5 s</div>
+  <div class="corner">
+    <div class="win code"><div class="tb">main.rs — rshot</div></div>
+    <div class="thumb">
+      <div class="shot"><div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210</div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div></div>
+      <div class="txt"><div><b>Path copied to clipboard</b><small>Screenshot_2026-09-22_20-41-07.png</small></div>
+        <div class="btns"><span class="p">Edit</span><span>Show in Files</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= C ======================= -->
+<div class="card dir C" data-choice="C-signal" onclick="toggleSelect(this)">
+  <h3>C · Signal <span class="tag">developer tool · monospace · bold</span></h3>
+  <p class="note">A strong look of its own: near-black panels, a lime accent, a monospace font, keyboard hints and a readout of the exact size and position. Puts the copied path front and centre.</p>
+  <div class="desk">
+    <div class="topbar"><span>Activities</span><span>Tue 22 Sep&nbsp; 20:41</span><span>● ● ●</span></div>
+    <div class="dock"><i style="background:#e95420"></i><i style="background:#3584e4"></i><i style="background:#2ec27e"></i><i style="background:#f6d32d"></i><i style="background:#9141ac"></i></div>
+    <div class="win code"><div class="tb">main.rs — rshot</div><div class="body">
+      <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:14%"></b><b class="t" style="width:4%"></b></div>
+      <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:22%"></b></div>
+      <div class="ln"></div>
+      <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:12%"></b><b class="t" style="width:10%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="k" style="width:6%"></b><b class="v" style="width:12%"></b><b class="t" style="width:4%"></b><b class="f" style="width:18%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="c" style="width:40%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="v" style="width:9%"></b><b class="f" style="width:14%"></b><b class="s" style="width:26%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="k" style="width:4%"></b><b class="v" style="width:10%"></b><b class="t" style="width:3%"></b></div>
+      <div class="ln" style="margin-left:10%"><b class="f" style="width:16%"></b><b class="v" style="width:8%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="t" style="width:3%"></b></div>
+      <div class="ln"><b class="t" style="width:3%"></b></div>
+      <div class="ln"></div>
+      <div class="ln"><b class="c" style="width:30%"></b></div>
+      <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:15%"></b><b class="t" style="width:14%"></b></div>
+      <div class="ln" style="margin-left:5%"><b class="v" style="width:12%"></b><b class="s" style="width:20%"></b></div>
+    </div></div>
+    <div class="win browser"><div class="tabs"></div><div class="url"><span></span></div>
+      <div class="pg" style="left:3%;top:18%;width:11%;height:3%"></div><div class="pg" style="left:3%;top:25%;width:9%;height:3%"></div><div class="pg" style="left:3%;top:32%;width:10%;height:3%"></div>
+      <div class="pg" style="left:18%;top:17%;width:40%;height:5%;background:#d7d7de"></div><div class="pg" style="left:18%;top:24%;width:28%;height:3%"></div>
+      <div class="pg" style="left:18%;top:81%;width:64%;height:3%"></div><div class="pg" style="left:18%;top:87%;width:50%;height:3%"></div>
+    </div>
+    <div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div>
+    <div class="guide" style="left:0;right:0;top:75%;height:1px"></div><div class="guide" style="top:0;bottom:0;left:88%;width:1px"></div>
+    <div class="sel">
+      <span class="br tl"></span><span class="br tr"></span><span class="br bl"></span><span class="br brr"></span>
+      <div class="dim">870×569<span>@ 1382,511</span></div>
+    </div>
+    <svg class="cursor"><use href="#i-cursor"/></svg>
+    <div class="bar">
+      <span class="btn on"><svg class="ic"><use href="#i-area"/></svg>area</span>
+      <span class="btn"><svg class="ic"><use href="#i-window"/></svg>window</span>
+      <span class="btn"><svg class="ic"><use href="#i-screen"/></svg>screen</span><span class="sep"></span>
+      <span class="btn"><svg class="ic"><use href="#i-recarea"/></svg>rec</span><span class="sep"></span>
+      <span class="btn"><svg class="ic"><use href="#i-timer"/></svg>off</span>
+      <span class="btn"><svg class="ic"><use href="#i-mic"/></svg>off</span>
+      <span class="go">capture <kbd>⏎</kbd></span>
+      <span class="btn"><kbd>esc</kbd></span>
+    </div>
+  </div>
+  <div class="cap">After capture: bottom-right, fades after 5 s</div>
+  <div class="corner">
+    <div class="win code"><div class="tb">main.rs — rshot</div></div>
+    <div class="thumb">
+      <div class="shot"><div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div></div>
+      <div class="path"><i>~/Pictures/Screenshots/</i>Screenshot_2026-09-22_20-41-07.png</div>
+      <div class="row"><span class="ok">✓ path copied</span><span class="keys"><span>e edit</span><span>o open</span><span>del</span></span></div>
+    </div>
+  </div>
+</div>
+
+</body></html>

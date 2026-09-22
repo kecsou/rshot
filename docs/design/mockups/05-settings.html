@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>rshot mockup: tray, onboarding, settings</title>
+<style>
+:root{--bg-primary:#f5f5f7;--bg-secondary:#fff;--bg-tertiary:#e5e5e7;--border:#d1d1d6;--text-primary:#1d1d1f;--text-secondary:#86868b;--selected-border:#0071e3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);padding:2rem;line-height:1.5}
+h2{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}h3{font-size:1.1rem;font-weight:600;margin-bottom:.25rem}
+.subtitle{color:var(--text-secondary);margin-bottom:1.5rem;max-width:1100px}
+.card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+</style></head><body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+.ic{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ic.sm{width:13px;height:13px}
+.top{display:grid;grid-template-columns:1fr 1.25fr;gap:18px;max-width:1100px;align-items:start}
+.cap{font:600 10px Inter;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:0 0 6px}
+.note{color:var(--text-secondary);font-size:.8rem;margin-top:8px}
+
+/* tray (native menu, GNOME rendering) */
+.traybg{position:relative;height:392px;border-radius:10px;overflow:hidden;font-family:Inter;
+  background:radial-gradient(110% 90% at 85% 5%,#7a2f6b 0%,transparent 55%),radial-gradient(90% 80% at 5% 105%,#e95420 0%,transparent 55%),#2c001e}
+.tbar{height:26px;background:#000;color:#eee;font:500 10.5px Inter;display:flex;align-items:center;justify-content:space-between;padding:0 10px}
+.tbar .icons{display:flex;gap:10px;align-items:center}
+.tico{width:18px;height:18px;border-radius:5px;background:rgba(255,255,255,.2);display:grid;place-items:center}
+.tico svg{width:13px;height:13px}
+.menu{position:absolute;right:30px;top:32px;width:280px;background:#353535;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.6);padding:6px;color:#fff;font:400 12.5px Inter}
+.menu .it{display:flex;justify-content:space-between;padding:7px 10px;border-radius:7px}
+.menu .it span{color:rgba(255,255,255,.5);font-size:11.5px}
+.menu .it.hl{background:rgba(255,255,255,.1)}
+.menu hr{border:0;height:1px;background:rgba(255,255,255,.1);margin:5px 6px}
+
+/* dialog */
+.dlgbg{position:relative;height:392px;border-radius:10px;overflow:hidden;display:grid;place-items:center;background:
+  radial-gradient(110% 90% at 85% 5%,#7a2f6b 0%,transparent 55%),radial-gradient(90% 80% at 5% 105%,#e95420 0%,transparent 55%),#2c001e}
+.dlgbg::before{content:'';position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.dlg{position:relative;width:440px;background:#232328;border:1px solid #38383f;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.6);padding:22px;color:#f2f2f7;font-family:Inter}
+.logo{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#0a84ff,#5e5ce6);display:grid;place-items:center;margin-bottom:12px;box-shadow:0 6px 16px rgba(10,132,255,.35)}
+.logo svg{width:24px;height:24px;color:#fff}
+.dlg h4{font:700 16px Inter;margin-bottom:4px}
+.dlg p{font:400 12.5px Inter;color:rgba(255,255,255,.65);line-height:1.5;margin-bottom:14px}
+.klist{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:16px}
+.klist div{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;font:500 12px Inter;border-top:1px solid rgba(255,255,255,.06)}
+.klist div:first-child{border-top:0}
+kbd{font:600 10.5px Inter;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.1);border-bottom-width:2px;border-radius:6px;padding:2px 7px}
+.acts{display:flex;justify-content:flex-end;gap:8px}
+.b2{height:32px;padding:0 14px;border-radius:8px;display:flex;align-items:center;gap:6px;font:600 12.5px Inter;background:rgba(255,255,255,.1);color:#fff}
+.b1{height:32px;padding:0 16px;border-radius:8px;display:flex;align-items:center;font:600 12.5px Inter;background:#0a84ff;color:#fff}
+
+/* settings window */
+.sw-win{max-width:720px;margin-top:26px;border-radius:12px;overflow:hidden;background:#1b1b1f;border:1px solid #34343a;box-shadow:0 30px 80px rgba(0,0,0,.35);font-family:Inter;color:#f2f2f7}
+.sw-hdr{height:46px;background:#232328;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;position:relative;font:600 13px Inter}
+.wx{position:absolute;right:12px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1)}
+.wx .ic{width:12px;height:12px}
+.sw-body{padding:18px 26px 24px}
+.grp{margin-bottom:18px}
+.grp h5{font:600 12px Inter;color:rgba(255,255,255,.55);margin:0 0 7px 4px}
+.box{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);border-radius:12px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;border-top:1px solid rgba(255,255,255,.06);min-height:46px}
+.row:first-child{border-top:0}
+.row .l{font:500 13px Inter}
+.row .l small{display:block;font:400 11.5px Inter;color:rgba(255,255,255,.5);margin-top:1px}
+.tg{width:36px;height:22px;border-radius:11px;background:rgba(255,255,255,.18);position:relative;flex-shrink:0}
+.tg::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.tg.on{background:#0a84ff}.tg.on::after{left:16px}
+.fld{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:8px;background:rgba(255,255,255,.08);font:500 12px Inter;color:rgba(255,255,255,.85)}
+.fld .ic{width:14px;height:14px;color:rgba(255,255,255,.55)}
+.seg{display:flex;padding:2px;border-radius:8px;background:rgba(255,255,255,.08)}
+.seg span{padding:5px 12px;border-radius:6px;font:500 12px Inter;color:rgba(255,255,255,.75)}
+.seg span.on{background:rgba(255,255,255,.2);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.keycap{display:flex;gap:4px;align-items:center}
+.rebind{height:30px;padding:0 12px;border-radius:8px;display:flex;align-items:center;font:500 12px Inter;color:#0a84ff;box-shadow:inset 0 0 0 1.5px #0a84ff;background:rgba(10,132,255,.1)}
+.warn{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-top:1px solid rgba(255,255,255,.06);font:400 11.5px Inter;color:rgba(255,255,255,.6);line-height:1.45}
+.warn b{color:#fff;font-weight:600}
+.link{color:#0a84ff;font:500 12px Inter}
+</style>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+</svg>
+
+<h2>5 · Tray menu, first run, settings</h2>
+<p class="subtitle">Screens for the background app itself. The tray menu is drawn by the OS, so it takes the system look on each platform.</p>
+
+<div class="top">
+  <div>
+    <div class="cap">5a · Tray menu (native)</div>
+    <div class="traybg">
+      <div class="tbar"><span>Activities</span><span>Tue 22 Sep&nbsp; 20:47</span><span class="icons"><span class="tico" style="background:rgba(255,255,255,.28)"><svg class="ic" style="color:#fff"><use href="#i-logo"/></svg></span>● ● ●</span></div>
+      <div class="menu">
+        <div class="it hl">Capture Area<span>Print</span></div>
+        <div class="it">Capture Screen<span>Shift+Print</span></div>
+        <div class="it">Capture Window<span>Alt+Print</span></div>
+        <div class="it">Record Screen…<span>Ctrl+Alt+Shift+R</span></div>
+        <hr>
+        <div class="it">Open Last Capture</div>
+        <div class="it">Open Screenshots Folder</div>
+        <hr>
+        <div class="it">Settings…</div>
+        <div class="it">Quit rshot</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="cap">5b · First launch: asks before taking over shortcuts</div>
+    <div class="dlgbg">
+      <div class="dlg">
+        <div class="logo"><svg class="ic"><use href="#i-logo"/></svg></div>
+        <h4>Make rshot your screenshot tool?</h4>
+        <p>rshot will take over these shortcuts from GNOME Screenshot. You can give them back at any time in Settings, and uninstalling rshot restores them too.</p>
+        <div class="klist">
+          <div>Capture area (with toolbar)<kbd>Print</kbd></div>
+          <div>Capture screen<kbd>Shift+Print</kbd></div>
+          <div>Capture window<kbd>Alt+Print</kbd></div>
+          <div>Record screen<kbd>Ctrl+Alt+Shift+R</kbd></div>
+        </div>
+        <div class="acts"><span class="b2">Not now</span><span class="b1">Use rshot</span></div>
+      </div>
+    </div>
+    <div class="note">On macOS a second step asks for the <b>Screen Recording</b> permission and shows an "Open System Settings" button. Windows needs no extra step.</div>
+  </div>
+</div>
+
+<div class="cap" style="margin-top:26px">5c · Settings (one scrolling page, no tabs)</div>
+<div class="sw-win" style="margin-top:0">
+  <div class="sw-hdr">rshot Settings<span class="wx"><svg class="ic"><use href="#i-x"/></svg></span></div>
+  <div class="sw-body">
+    <div class="grp"><h5>General</h5><div class="box">
+      <div class="row"><span class="l">Launch at login</span><span class="tg on"></span></div>
+      <div class="row"><span class="l">Screenshots folder</span><span class="fld"><svg class="ic"><use href="#i-folder"/></svg>~/Pictures/Screenshots</span></div>
+      <div class="row"><span class="l">Recordings folder</span><span class="fld"><svg class="ic"><use href="#i-folder"/></svg>~/Videos/Screencasts</span></div>
+    </div></div>
+
+    <div class="grp"><h5>After capture</h5><div class="box">
+      <div class="row"><span class="l">Clipboard<small>Path + image: terminals get the path, chat apps get the image</small></span><span class="seg"><span class="on">Path + image</span><span>Path only</span></span></div>
+      <div class="row"><span class="l">Show floating thumbnail</span><span class="tg on"></span></div>
+      <div class="row"><span class="l">Shutter sound</span><span class="tg on"></span></div>
+    </div></div>
+
+    <div class="grp"><h5>Shortcuts</h5><div class="box">
+      <div class="row"><span class="l">Take over system screenshot shortcuts<small>Turning this off gives the shortcuts back to GNOME Screenshot</small></span><span class="tg on"></span></div>
+      <div class="row"><span class="l">Capture area</span><span class="keycap"><kbd>Print</kbd></span></div>
+      <div class="row"><span class="l">Capture screen</span><span class="keycap"><kbd>Shift</kbd><kbd>Print</kbd></span></div>
+      <div class="row"><span class="l">Capture window</span><span class="rebind">Press new shortcut…  Esc to cancel</span></div>
+      <div class="row"><span class="l">Record screen</span><span class="keycap"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Shift</kbd><kbd>R</kbd></span></div>
+    </div></div>
+
+    <div class="grp"><h5>Recording</h5><div class="box">
+      <div class="row"><span class="l">Microphone</span><span class="fld"><svg class="ic"><use href="#i-mic"/></svg>None<svg class="ic sm"><use href="#i-down"/></svg></span></div>
+      <div class="row"><span class="l">Frame rate</span><span class="seg"><span class="on">30 fps</span><span>60 fps</span></span></div>
+    </div></div>
+
+    <div style="display:flex;justify-content:space-between;font:500 11.5px Inter;color:rgba(255,255,255,.45);padding:2px 4px">
+      <span>rshot 0.1.0</span><span class="link">Open config file</span>
+    </div>
+  </div>
+</div>
+
+</body></html>

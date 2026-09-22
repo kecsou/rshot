@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>rshot mockup: capture overlay</title>
+<style>
+:root{--bg-primary:#f5f5f7;--bg-secondary:#fff;--bg-tertiary:#e5e5e7;--border:#d1d1d6;--text-primary:#1d1d1f;--text-secondary:#86868b;--selected-border:#0071e3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);padding:2rem;line-height:1.5}
+h2{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}h3{font-size:1.1rem;font-weight:600;margin-bottom:.25rem}
+.subtitle{color:var(--text-secondary);margin-bottom:1.5rem;max-width:1100px}
+.card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+</style></head><body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+.ic{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ic.sm{width:13px;height:13px}
+/* scene */
+.desk{position:relative;aspect-ratio:16/9;max-width:1100px;border-radius:10px;overflow:hidden;font-family:Inter,system-ui;
+  background:radial-gradient(110% 90% at 85% 5%,#7a2f6b 0%,transparent 55%),radial-gradient(90% 80% at 5% 105%,#e95420 0%,transparent 55%),#2c001e}
+.topbar{position:absolute;inset:0 0 auto 0;height:3.4%;background:#000;color:#eee;font:500 10px Inter;display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:1}
+.dock{position:absolute;left:0;top:3.4%;bottom:0;width:4.2%;background:rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;gap:6%;padding-top:1.2%;z-index:1}
+.dock i{width:62%;aspect-ratio:1;border-radius:22%;display:block}
+.win{position:absolute;border-radius:8px;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.5)}
+.tb{height:5.5%;min-height:18px;background:#2b2b2b;color:#aaa;font:500 10px Inter;display:flex;align-items:center;justify-content:center;position:relative}
+.tb::after{content:'';position:absolute;right:10px;width:9px;height:9px;border-radius:50%;background:#555;box-shadow:-14px 0 0 #555,-28px 0 0 #555}
+.code{left:5.5%;top:8%;width:52%;height:80%;background:#1e1e1e;z-index:2}
+.code .body{padding:3% 4%}
+.ln{display:flex;gap:6px;height:7px;margin:0 0 9px 0}.ln b{display:block;height:100%;border-radius:3px}
+.k{background:#569cd6}.v{background:#9cdcfe}.s{background:#ce9178}.c{background:#6a9955}.t{background:#d4d4d4}.f{background:#dcdcaa}.y{background:#4ec9b0}
+.browser{left:46%;top:14%;width:50%;height:76%;background:#fff;z-index:3}
+.tabs{height:6%;background:#dee1e6}.url{height:7%;background:#fff;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;padding:0 3%}
+.url span{height:55%;flex:1;border-radius:20px;background:#f1f3f4}
+.pg{position:absolute;background:#e9e9ee;border-radius:3px}
+.chart{position:absolute;left:55%;top:38%;width:32%;height:34%;background:#fff;border:1px solid #e6e6ea;border-radius:8px;z-index:4;padding:1.2% 1.5%;box-sizing:border-box;display:flex;flex-direction:column}
+.chart .t1{font:500 10px Inter;color:#6b6b76}.chart .t2{font:700 19px Inter;color:#18181b;margin-top:2px}
+.chart .t2 em{font:600 10px Inter;color:#16a34a;font-style:normal;margin-left:6px}
+.bars{flex:1;display:flex;align-items:flex-end;gap:5%;margin-top:6%}
+.bars i{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(#8b7bff,#5b4cf0);display:block}
+
+/* ---- GLASS system ---- */
+.glass{background:rgba(40,40,46,.68);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.12);box-shadow:0 14px 44px rgba(0,0,0,.5);color:#f2f2f7}
+.sel{position:absolute;z-index:5;border:1.5px solid rgba(255,255,255,.95);box-shadow:0 0 0 200vmax rgba(0,0,0,.5)}
+.h{position:absolute;width:9px;height:9px;background:#fff;border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
+.dim{position:absolute;top:calc(100% + 8px);right:0;font:500 11px Inter;padding:3px 8px;border-radius:6px}
+.bar{position:absolute;left:50%;bottom:4.5%;transform:translateX(-50%);z-index:10;display:flex;align-items:center;white-space:nowrap;gap:2px;padding:6px;border-radius:14px}
+.btn{width:36px;height:30px;display:grid;place-items:center;border-radius:8px;color:#d9d9e0}
+.btn.on{background:rgba(255,255,255,.17);color:#fff}
+.sep{width:1px;height:20px;background:rgba(255,255,255,.15);margin:0 6px}
+.opt{font:500 12px Inter;padding:0 10px;height:30px;display:flex;align-items:center;gap:5px;border-radius:8px;color:#e5e5ea}
+.opt.on{background:rgba(255,255,255,.17)}
+.go{background:#0a84ff;color:#fff;font:600 12px Inter;padding:0 16px;height:30px;border-radius:8px;display:flex;align-items:center;margin-left:4px}
+.hint{position:absolute;top:6%;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:14px;align-items:center;padding:7px 14px;border-radius:10px;font:500 11.5px Inter;white-space:nowrap}
+.hint span{color:rgba(255,255,255,.6)}
+kbd{font:600 10px Inter;color:#fff;background:rgba(255,255,255,.14);border-radius:5px;padding:2px 6px;margin-right:5px}
+.shade{position:absolute;inset:0;background:rgba(0,0,0,.28);z-index:5}
+
+/* loupe */
+.xhair{position:absolute;z-index:9;width:22px;height:22px;transform:translate(-50%,-50%)}
+.loupe{position:absolute;z-index:9;width:112px;height:112px;border-radius:50%;overflow:hidden;border:2px solid #fff;box-shadow:0 8px 26px rgba(0,0,0,.55);
+  background:linear-gradient(#5b4cf0,#5b4cf0) 56px 50px/100% 100% no-repeat,#fff}
+.loupe::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(0,0,0,.09) 0 1px,transparent 1px 10px),repeating-linear-gradient(0deg,rgba(0,0,0,.09) 0 1px,transparent 1px 10px)}
+.loupe::after{content:'';position:absolute;left:50px;top:50px;width:10px;height:10px;box-shadow:0 0 0 1.5px #0a84ff}
+.coord{position:absolute;z-index:9;font:500 10.5px Inter;padding:3px 8px;border-radius:6px;white-space:nowrap}
+.coord i{display:inline-block;width:8px;height:8px;border-radius:2px;background:#5b4cf0;margin:0 4px 0 6px;vertical-align:0}
+
+/* window mode */
+.winhl{position:absolute;left:46%;top:14%;width:50%;height:76%;border-radius:8px;z-index:5;background:rgba(10,132,255,.10);box-shadow:0 0 0 200vmax rgba(0,0,0,.5),inset 0 0 0 2.5px #0a84ff}
+.winlabel{position:absolute;left:71%;top:47%;transform:translate(-50%,-50%);z-index:6;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 16px;border-radius:12px;font:600 13px Inter}
+.winlabel small{font:500 11px Inter;color:rgba(255,255,255,.6)}
+
+/* popover */
+.pop{position:absolute;z-index:11;right:calc(50% - 222px);bottom:calc(4.5% + 52px);width:430px;padding:14px;border-radius:14px;font:500 12px Inter;display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;background:rgba(40,40,46,.78)}
+.pop .lbl{font:600 10px Inter;letter-spacing:.05em;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:6px}
+.field{display:flex;align-items:center;gap:7px;height:28px;padding:0 9px;border-radius:7px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.08)}
+.field .ic{width:14px;height:14px;color:rgba(255,255,255,.6)}.field .grow{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{display:flex;padding:2px;border-radius:8px;background:rgba(255,255,255,.08)}
+.seg span{flex:1;text-align:center;padding:4px 0;border-radius:6px;color:rgba(255,255,255,.75)}
+.seg span.on{background:rgba(255,255,255,.2);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.tog{display:flex;align-items:center;justify-content:space-between;height:26px}
+.sw{width:30px;height:18px;border-radius:9px;background:rgba(255,255,255,.18);position:relative}
+.sw::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.35)}
+.sw.on{background:#0a84ff}.sw.on::after{left:14px}
+.pop .full{grid-column:1/-1;height:1px;background:rgba(255,255,255,.1);margin:-4px 0}
+
+/* countdown */
+.count{position:absolute;left:71%;top:55.25%;transform:translate(-50%,-50%);z-index:9;width:108px;height:108px;border-radius:50%;display:grid;place-items:center;font:600 50px Inter}
+.count svg{position:absolute;inset:-2px;width:112px;height:112px;transform:rotate(-90deg)}
+.count small{position:absolute;bottom:-34px;font:500 11px Inter;color:#fff;white-space:nowrap;padding:3px 9px;border-radius:6px;background:rgba(40,40,46,.8);backdrop-filter:blur(12px)}
+
+.panel{margin-bottom:34px}
+.panel h3{margin-bottom:2px}
+.panel p{color:var(--text-secondary);font-size:.85rem;margin-bottom:10px;max-width:1100px}
+</style>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></symbol>
+  <symbol id="i-area" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/></symbol>
+  <symbol id="i-recscreen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><circle cx="12" cy="10" r="2.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-recarea" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M5 3l14 7-6 2-2 6z" fill="#fff" stroke="#000" stroke-width="1.4"/></symbol>
+  <symbol id="i-xhair" viewBox="0 0 22 22"><g stroke="#000" stroke-width="3" stroke-linecap="round" opacity=".55"><path d="M11 1v7M11 14v7M1 11h7M14 11h7"/></g><g stroke="#fff" stroke-width="1.4" stroke-linecap="round"><path d="M11 1v7M11 14v7M1 11h7M14 11h7"/></g></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z" fill="#fff" stroke="#000" stroke-width="1.3"/><circle cx="12" cy="13" r="3.3" fill="#fff" stroke="#000" stroke-width="1.3"/></symbol>
+</svg>
+
+<template id="scene">
+  <div class="topbar"><span>Activities</span><span>Tue 22 Sep&nbsp; 20:41</span><span>● ● ●</span></div>
+  <div class="dock"><i style="background:#e95420"></i><i style="background:#3584e4"></i><i style="background:#2ec27e"></i><i style="background:#f6d32d"></i><i style="background:#9141ac"></i></div>
+  <div class="win code"><div class="tb">main.rs — rshot</div><div class="body">
+    <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:14%"></b><b class="t" style="width:4%"></b></div>
+    <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:22%"></b></div><div class="ln"></div>
+    <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:12%"></b><b class="t" style="width:10%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="k" style="width:6%"></b><b class="v" style="width:12%"></b><b class="t" style="width:4%"></b><b class="f" style="width:18%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="c" style="width:40%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="v" style="width:9%"></b><b class="f" style="width:14%"></b><b class="s" style="width:26%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="k" style="width:4%"></b><b class="v" style="width:10%"></b><b class="t" style="width:3%"></b></div>
+    <div class="ln" style="margin-left:10%"><b class="f" style="width:16%"></b><b class="v" style="width:8%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="t" style="width:3%"></b></div><div class="ln"><b class="t" style="width:3%"></b></div><div class="ln"></div>
+    <div class="ln"><b class="c" style="width:30%"></b></div>
+    <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:15%"></b><b class="t" style="width:14%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="v" style="width:12%"></b><b class="s" style="width:20%"></b></div>
+  </div></div>
+  <div class="win browser"><div class="tabs"></div><div class="url"><span></span></div>
+    <div class="pg" style="left:3%;top:18%;width:11%;height:3%"></div><div class="pg" style="left:3%;top:25%;width:9%;height:3%"></div><div class="pg" style="left:3%;top:32%;width:10%;height:3%"></div>
+    <div class="pg" style="left:18%;top:17%;width:40%;height:5%;background:#d7d7de"></div><div class="pg" style="left:18%;top:24%;width:28%;height:3%"></div>
+    <div class="pg" style="left:18%;top:81%;width:64%;height:3%"></div><div class="pg" style="left:18%;top:87%;width:50%;height:3%"></div>
+  </div>
+  <div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div>
+</template>
+
+<template id="toolbar">
+  <span class="btn"><svg class="ic"><use href="#i-x"/></svg></span><span class="sep"></span>
+  <span class="btn" data-m="screen"><svg class="ic"><use href="#i-screen"/></svg></span>
+  <span class="btn" data-m="window"><svg class="ic"><use href="#i-window"/></svg></span>
+  <span class="btn" data-m="area"><svg class="ic"><use href="#i-area"/></svg></span><span class="sep"></span>
+  <span class="btn" data-m="recscreen"><svg class="ic"><use href="#i-recscreen"/></svg></span>
+  <span class="btn" data-m="recarea"><svg class="ic"><use href="#i-recarea"/></svg></span><span class="sep"></span>
+  <span class="opt">Options <svg class="ic sm"><use href="#i-down"/></svg></span>
+  <span class="go">Capture</span>
+</template>
+
+<h2>2 · Capture overlay: states</h2>
+<p class="subtitle">Everything on the frozen screen after you press <b>Print</b>. The toolbar has the same five modes as macOS <b>⌘⇧5</b>: screen, window, area, record screen, record area. <b>Shift+Print</b> (full screen) and <b>Alt+Print</b> (window) skip the overlay and capture straight away.</p>
+
+<div class="panel">
+  <h3>2a · Just pressed Print (area mode)</h3>
+  <p>The screen dims slightly. A magnifier follows the crosshair and shows the pixel grid, coordinates and colour under the cursor. The hint bar fades out after the first few uses. With <b>Remember last selection</b> on, the previous rectangle is already drawn and <b>⏎</b> captures it again.</p>
+  <div class="desk" data-scene data-mode="area">
+    <div class="shade"></div>
+    <div class="hint glass"><div><kbd>drag</kbd><span>select area</span></div><div><kbd>Space</kbd><span>window mode</span></div><div><kbd>⏎</kbd><span>capture</span></div><div><kbd>Esc</kbd><span>cancel</span></div></div>
+    <svg class="xhair" style="left:63%;top:53%"><use href="#i-xhair"/></svg>
+    <div class="loupe" style="left:calc(63% + 18px);top:calc(53% + 18px)"></div>
+    <div class="coord glass" style="left:calc(63% + 18px);top:calc(53% + 138px)">1612, 763<i></i>#5B4CF0</div>
+    <div class="bar glass"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>2b · Window mode (<kbd style="color:inherit;background:var(--bg-tertiary)">Space</kbd> or the window button)</h3>
+  <p>The window under the cursor lights up with a blue tint. Click it to capture just that window, even if another window covers part of it.</p>
+  <div class="desk" data-scene data-mode="window">
+    <div class="winhl"></div>
+    <div class="winlabel glass">Firefox — Analytics<small>1280 × 912 · click to capture</small></div>
+    <svg class="xhair" style="left:78%;top:60%;width:24px;height:24px"><use href="#i-cam"/></svg>
+    <div class="bar glass"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>2c · Options popover</h3>
+  <p>Settings you'd want to change on the spot live here. Everything else goes in the Settings window. Choices are remembered between captures.</p>
+  <div class="desk" data-scene data-mode="area" data-opt>
+    <div class="sel" style="left:54%;top:35.5%;width:34%;height:39.5%">
+      <span class="h" style="left:-5px;top:-5px"></span><span class="h" style="right:-5px;top:-5px"></span><span class="h" style="left:-5px;bottom:-5px"></span><span class="h" style="right:-5px;bottom:-5px"></span>
+    </div>
+    <div class="pop glass">
+      <div><div class="lbl">Save to</div><div class="field"><svg class="ic"><use href="#i-folder"/></svg><span class="grow">~/Pictures/Screenshots</span><svg class="ic sm"><use href="#i-down"/></svg></div></div>
+      <div><div class="lbl">Timer</div><div class="seg"><span class="on">Off</span><span>3 s</span><span>5 s</span><span>10 s</span></div></div>
+      <div class="full"></div>
+      <div>
+        <div class="tog">Show floating thumbnail<span class="sw on"></span></div>
+        <div class="tog">Remember last selection<span class="sw on"></span></div>
+        <div class="tog">Show mouse pointer<span class="sw"></span></div>
+      </div>
+      <div><div class="lbl">Microphone (recording)</div><div class="field"><svg class="ic"><use href="#i-mic"/></svg><span class="grow">None</span><svg class="ic sm"><use href="#i-down"/></svg></div></div>
+    </div>
+    <div class="bar glass"></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>2d · Timer countdown</h3>
+  <p>Once you capture with a timer, the toolbar hides and a ring counts down inside the selection. <b>Esc</b> cancels.</p>
+  <div class="desk" data-scene data-mode="area" data-nobar>
+    <div class="sel" style="left:54%;top:35.5%;width:34%;height:39.5%"></div>
+    <div class="count glass">3
+      <svg viewBox="0 0 112 112"><circle cx="56" cy="56" r="54" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="3"/><circle cx="56" cy="56" r="54" fill="none" stroke="#0a84ff" stroke-width="3" stroke-linecap="round" stroke-dasharray="339.3" stroke-dashoffset="113"/></svg>
+      <small>Esc to cancel</small>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.desk[data-scene]').forEach(d => {
+  d.prepend(document.getElementById('scene').content.cloneNode(true));
+  const bar = d.querySelector('.bar');
+  if (bar) {
+    bar.append(document.getElementById('toolbar').content.cloneNode(true));
+    bar.querySelector(`[data-m="${d.dataset.mode}"]`)?.classList.add('on');
+    if (d.hasAttribute('data-opt')) bar.querySelector('.opt').classList.add('on');
+  }
+});
+</script>
+
+</body></html>

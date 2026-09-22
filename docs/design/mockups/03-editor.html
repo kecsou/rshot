@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>rshot mockup: image editor</title>
+<style>
+:root{--bg-primary:#f5f5f7;--bg-secondary:#fff;--bg-tertiary:#e5e5e7;--border:#d1d1d6;--text-primary:#1d1d1f;--text-secondary:#86868b;--selected-border:#0071e3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);padding:2rem;line-height:1.5}
+h2{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}h3{font-size:1.1rem;font-weight:600;margin-bottom:.25rem}
+.subtitle{color:var(--text-secondary);margin-bottom:1.5rem;max-width:1100px}
+.card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+</style></head><body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ic.sm{width:14px;height:14px}
+.glass{background:rgba(44,44,50,.78);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.12);box-shadow:0 14px 44px rgba(0,0,0,.5);color:#f2f2f7}
+
+.ed{max-width:1100px;height:700px;border-radius:12px;overflow:hidden;background:#1b1b1f;border:1px solid #34343a;box-shadow:0 30px 80px rgba(0,0,0,.35);display:flex;flex-direction:column;font-family:Inter,system-ui;color:#f2f2f7}
+.hdr{height:48px;flex-shrink:0;background:#232328;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;padding:0 10px 0 16px;gap:8px}
+.hdr .title{font:600 13px Inter}.hdr .meta{font:500 11.5px Inter;color:rgba(255,255,255,.45);margin-left:8px}
+.hdr .sp{flex:1}
+.ib{width:32px;height:30px;display:grid;place-items:center;border-radius:8px;color:#d9d9e0}
+.ib.dis{color:rgba(255,255,255,.3)}
+.vsep{width:1px;height:20px;background:rgba(255,255,255,.12);margin:0 4px}
+.b2{height:30px;padding:0 12px;border-radius:8px;display:flex;align-items:center;gap:6px;font:600 12px Inter;background:rgba(255,255,255,.1);color:#fff}
+.b1{height:30px;padding:0 16px;border-radius:8px;display:flex;align-items:center;font:600 12px Inter;background:#0a84ff;color:#fff}
+.wx{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);margin-left:8px}
+.wx .ic{width:12px;height:12px}
+
+.body{flex:1;position:relative;display:grid;place-items:center;background:radial-gradient(circle,rgba(255,255,255,.07) 1px,transparent 1.2px) 0 0/18px 18px,#1b1b1f}
+.rail{position:absolute;left:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:14px;z-index:5}
+.rail .t{width:36px;height:34px;display:grid;place-items:center;border-radius:9px;color:#d9d9e0;position:relative}
+.rail .t.on{background:#0a84ff;color:#fff}
+.rail .hsep{height:1px;background:rgba(255,255,255,.12);margin:4px 6px}
+.rail .sw{width:36px;height:34px;display:grid;place-items:center}
+.rail .sw i{width:18px;height:18px;border-radius:50%;background:#ff453a;box-shadow:0 0 0 2px rgba(255,255,255,.9)}
+
+/* style popover */
+.pop{position:absolute;left:66px;top:calc(50% - 142px);width:232px;padding:12px;border-radius:14px;z-index:6;font:500 12px Inter}
+.pop::before{content:'';position:absolute;left:-6px;top:82px;width:10px;height:10px;background:inherit;transform:rotate(45deg);border-left:1px solid rgba(255,255,255,.12);border-bottom:1px solid rgba(255,255,255,.12)}
+.lbl{font:600 10px Inter;letter-spacing:.05em;text-transform:uppercase;color:rgba(255,255,255,.45);margin:0 0 7px}
+.sws{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:12px}
+.sws i{aspect-ratio:1;border-radius:50%;display:block;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+.sws i.on{box-shadow:0 0 0 2px #232328,0 0 0 4px #fff}
+.seg{display:flex;padding:2px;border-radius:8px;background:rgba(255,255,255,.08);margin-bottom:12px}
+.seg span{flex:1;height:26px;display:grid;place-items:center;border-radius:6px;color:rgba(255,255,255,.75);font:500 11.5px Inter}
+.seg span.on{background:rgba(255,255,255,.2);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.seg span b{display:block;width:22px;border-radius:3px;background:currentColor}
+.tog{display:flex;align-items:center;justify-content:space-between;height:24px}
+.swt{width:30px;height:18px;border-radius:9px;background:rgba(255,255,255,.18);position:relative}
+.swt::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+.swt.on{background:#0a84ff}.swt.on::after{left:14px}
+
+/* the screenshot being edited */
+.img{position:relative;width:640px;height:420px;background:#fff;border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 24px 60px rgba(0,0,0,.55);font-family:Inter;margin-left:60px}
+.img .t1{position:absolute;left:28px;top:22px;font:500 15px Inter;color:#55555f}
+.img .t2{position:absolute;left:28px;top:46px;font:700 36px Inter;color:#18181b;letter-spacing:-.02em}
+.img .badge{position:absolute;left:160px;top:62px;font:600 12px Inter;color:#15803d;background:#dcfce7;padding:3px 8px;border-radius:99px}
+.img .bars{position:absolute;left:28px;right:28px;top:140px;height:212px;display:flex;align-items:flex-end;gap:18px;border-bottom:1px solid #e4e4e7}
+.img .bars i{flex:1;border-radius:4px 4px 0 0;background:linear-gradient(#8b7bff,#5b4cf0);display:block}
+.img .xl{position:absolute;left:28px;right:28px;top:358px;display:flex;gap:18px;font:500 10.5px Inter;color:#8b8b95}
+.img .xl span{flex:1;text-align:center}
+.img .src{position:absolute;left:28px;top:388px;font:500 11px Inter;color:#8b8b95;display:flex;align-items:center;gap:4px}
+.pix{display:inline-grid;grid-template-columns:repeat(18,6px);grid-auto-rows:6px;vertical-align:middle}
+.pix i{display:block}
+.ann{position:absolute;inset:0;overflow:visible;pointer-events:none}
+.num{position:absolute;width:24px;height:24px;border-radius:50%;background:#ff453a;color:#fff;font:700 12.5px Inter;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.3),0 0 0 2px #fff}
+.tlabel{position:absolute;padding:5px 10px;border-radius:7px;background:#ff453a;color:#fff;font:600 13px Inter;box-shadow:0 3px 10px rgba(255,69,58,.35)}
+.hdl{position:absolute;width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px #0a84ff,0 1px 4px rgba(0,0,0,.4);transform:translate(-50%,-50%)}
+
+.foot{height:40px;flex-shrink:0;background:#232328;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 12px;font:500 11.5px Inter}
+.chip{display:flex;align-items:center;gap:8px;height:26px;padding:0 6px 0 8px;border-radius:7px;background:rgba(255,255,255,.06);max-width:560px;min-width:0}
+.chip .ok{width:15px;height:15px;border-radius:50%;background:#30d158;display:grid;place-items:center;color:#063;flex-shrink:0}
+.chip .p{color:rgba(255,255,255,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .p b{color:#fff;font-weight:500}
+.chip .cp{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;color:rgba(255,255,255,.7)}
+.zoom{display:flex;align-items:center;gap:2px;color:rgba(255,255,255,.8)}
+.zoom .ib{width:26px;height:24px}
+.dirty{color:rgba(255,255,255,.45);margin-right:12px}
+.dirty i{display:inline-block;width:6px;height:6px;border-radius:50%;background:#ff9f0a;margin-right:6px;vertical-align:1px}
+
+/* detail cards */
+.details{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1100px;margin-top:18px}
+.dc{background:#1b1b1f;border-radius:12px;padding:14px;border:1px solid #34343a;position:relative;min-height:250px;font-family:Inter;color:#f2f2f7;overflow:hidden}
+.dc h4{font:600 12px Inter;margin-bottom:10px;color:#fff}
+.dc .pop{position:static;width:auto}
+.dc .pop::before{display:none}
+.cropwrap{position:relative;height:150px;border-radius:4px;overflow:hidden;background:#fff}
+.cropwrap .mini{position:absolute;inset:0;padding:10px;font:700 18px Inter;color:#18181b}
+.cropwrap .mini .bb{position:absolute;left:10px;right:10px;bottom:12px;height:70px;display:flex;align-items:flex-end;gap:8px}
+.cropwrap .mini .bb i{flex:1;background:linear-gradient(#8b7bff,#5b4cf0);border-radius:2px 2px 0 0;display:block}
+.crop{position:absolute;left:14%;top:12%;width:66%;height:70%;box-shadow:0 0 0 999px rgba(0,0,0,.6),inset 0 0 0 1.5px #fff,0 0 0 1px rgba(0,0,0,.3)}
+.crop::before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 33%,rgba(0,0,0,.2) 33% calc(33% + 1px),transparent calc(33% + 1px) 66%,rgba(0,0,0,.2) 66% calc(66% + 1px),transparent calc(66% + 1px)),linear-gradient(0deg,transparent 33%,rgba(0,0,0,.2) 33% calc(33% + 1px),transparent calc(33% + 1px) 66%,rgba(0,0,0,.2) 66% calc(66% + 1px),transparent calc(66% + 1px))}
+.crop b{position:absolute;width:14px;height:14px;border:0 solid #fff;filter:drop-shadow(0 0 1.5px rgba(0,0,0,.7))}
+.crop .a{left:-3px;top:-3px;border-width:3px 0 0 3px}.crop .b{right:-3px;top:-3px;border-width:3px 3px 0 0}.crop .c{left:-3px;bottom:-3px;border-width:0 0 3px 3px}.crop .d{right:-3px;bottom:-3px;border-width:0 3px 3px 0}
+.cropbar{display:flex;gap:6px;align-items:center;margin-top:10px;padding:5px;border-radius:11px;font:500 11.5px Inter;white-space:nowrap}
+.cropbar .f{height:26px;padding:0 8px;border-radius:7px;background:rgba(255,255,255,.08);display:flex;align-items:center;gap:4px}
+.cropbar .g{flex:1}
+.cropbar .b1{height:26px;padding:0 10px;font-size:11.5px}
+.cropbar .b2{height:26px;padding:0 10px;font-size:11.5px;background:transparent}
+.slider{height:4px;border-radius:2px;background:rgba(255,255,255,.15);position:relative;margin:10px 2px 14px}
+.slider::before{content:'';position:absolute;left:0;top:0;bottom:0;width:60%;border-radius:2px;background:#0a84ff}
+.slider::after{content:'';position:absolute;left:60%;top:50%;width:14px;height:14px;border-radius:50%;background:#fff;transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.textsamples{display:flex;gap:8px;margin-top:6px;align-items:center}
+.ts1{font:600 13px Inter;color:#ff453a}
+.ts2{font:600 13px Inter;color:#fff;background:#ff453a;padding:3px 8px;border-radius:6px}
+.ts3{font:700 13px Inter;color:#fff;-webkit-text-stroke:3px #ff453a;paint-order:stroke fill}
+.keys{max-width:1100px;margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.8rem;color:var(--text-secondary)}
+.keys kbd{font:600 10.5px Inter;background:var(--bg-tertiary);color:var(--text-primary);border-radius:5px;padding:1px 6px;margin-right:4px}
+</style>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="t-select" viewBox="0 0 24 24"><path d="M6 3l12 8-5.5 1.3L9.5 18z"/></symbol>
+  <symbol id="t-crop" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14"/></symbol>
+  <symbol id="t-arrow" viewBox="0 0 24 24"><path d="M5 19L19 5M10 5h9v9"/></symbol>
+  <symbol id="t-rect" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/></symbol>
+  <symbol id="t-ellipse" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="7"/></symbol>
+  <symbol id="t-line" viewBox="0 0 24 24"><path d="M5 19L19 5"/></symbol>
+  <symbol id="t-pen" viewBox="0 0 24 24"><path d="M3 18c2.5-5 4.5-9 6.5-9s1 6 3.5 6 3-7 5-7 2 3 3 4"/></symbol>
+  <symbol id="t-hl" viewBox="0 0 24 24"><path d="M14.5 4.5l5 5L11 18H6v-5z"/><path d="M3 21h9" stroke-width="3"/></symbol>
+  <symbol id="t-text" viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></symbol>
+  <symbol id="t-num" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10.5 9.5L12.5 8v8"/></symbol>
+  <symbol id="t-blur" viewBox="0 0 24 24"><rect x="4" y="4" width="5" height="5" rx="1"/><rect x="15" y="4" width="5" height="5" rx="1" fill="currentColor"/><rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="currentColor"/><rect x="4" y="15" width="5" height="5" rx="1" fill="currentColor"/><rect x="15" y="15" width="5" height="5" rx="1"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="e-one" viewBox="0 0 24 24"><path d="M4 12h14M13 7l5 5-5 5"/></symbol>
+  <symbol id="e-two" viewBox="0 0 24 24"><path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/></symbol>
+  <symbol id="e-none" viewBox="0 0 24 24"><path d="M4 12h16"/></symbol>
+</svg>
+
+<h2>3 · Editor</h2>
+<p class="subtitle">Opens when you click the thumbnail (or from the tray: "Open last capture"). Tools sit in a rail on the left. Clicking the active tool again opens its style popover. <b>Done</b> saves over the same file, so the path already on your clipboard still points to it.</p>
+
+<div class="ed">
+  <div class="hdr">
+    <span class="title">Screenshot_2026-09-22_20-41-07.png</span><span class="meta">870 × 569 · PNG</span>
+    <span class="sp"></span>
+    <span class="ib"><svg class="ic"><use href="#i-undo"/></svg></span>
+    <span class="ib dis"><svg class="ic"><use href="#i-redo"/></svg></span>
+    <span class="vsep"></span>
+    <span class="ib"><svg class="ic"><use href="#i-trash"/></svg></span>
+    <span class="b2"><svg class="ic sm"><use href="#i-copy"/></svg>Copy</span>
+    <span class="b1">Done</span>
+    <span class="wx"><svg class="ic"><use href="#i-x"/></svg></span>
+  </div>
+
+  <div class="body">
+    <div class="rail glass">
+      <span class="t" title="Select  V"><svg class="ic"><use href="#t-select"/></svg></span>
+      <span class="t" title="Crop  C"><svg class="ic"><use href="#t-crop"/></svg></span>
+      <span class="hsep"></span>
+      <span class="t on" title="Arrow  A"><svg class="ic"><use href="#t-arrow"/></svg></span>
+      <span class="t" title="Rectangle  R"><svg class="ic"><use href="#t-rect"/></svg></span>
+      <span class="t" title="Ellipse  O"><svg class="ic"><use href="#t-ellipse"/></svg></span>
+      <span class="t" title="Line  L"><svg class="ic"><use href="#t-line"/></svg></span>
+      <span class="t" title="Pen  P"><svg class="ic"><use href="#t-pen"/></svg></span>
+      <span class="t" title="Highlighter  H"><svg class="ic"><use href="#t-hl"/></svg></span>
+      <span class="t" title="Text  T"><svg class="ic"><use href="#t-text"/></svg></span>
+      <span class="t" title="Step counter  N"><svg class="ic"><use href="#t-num"/></svg></span>
+      <span class="t" title="Redact  B"><svg class="ic"><use href="#t-blur"/></svg></span>
+      <span class="hsep"></span>
+      <span class="sw"><i></i></span>
+    </div>
+
+    <div class="pop glass">
+      <div class="lbl">Color</div>
+      <div class="sws"><i class="on" style="background:#ff453a"></i><i style="background:#ff9f0a"></i><i style="background:#ffd60a"></i><i style="background:#30d158"></i><i style="background:#0a84ff"></i><i style="background:#bf5af2"></i><i style="background:#fff"></i><i style="background:#1c1c1e"></i></div>
+      <div class="lbl">Width</div>
+      <div class="seg"><span><b style="height:2px"></b></span><span class="on"><b style="height:4px"></b></span><span><b style="height:7px"></b></span></div>
+      <div class="lbl">Ends</div>
+      <div class="seg"><span class="on"><svg class="ic sm"><use href="#e-one"/></svg></span><span><svg class="ic sm"><use href="#e-two"/></svg></span><span><svg class="ic sm"><use href="#e-none"/></svg></span></div>
+      <div class="tog">Drop shadow<span class="swt on"></span></div>
+    </div>
+
+    <div class="img">
+      <div class="t1">Weekly active users</div>
+      <div class="t2">48,210</div>
+      <div class="badge">▲ 12.4%</div>
+      <div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div>
+      <div class="xl"><span>W29</span><span>W30</span><span>W31</span><span>W32</span><span>W33</span><span>W34</span><span>W35</span><span>W36</span><span>W37</span><span>W38</span></div>
+      <div class="src">Source: <span class="pix" id="pix"></span> · updated 2 min ago</div>
+
+      <svg class="ann" viewBox="0 0 640 420">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.6" markerHeight="3.6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ff453a"/></marker>
+          <filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity=".35"/></filter>
+        </defs>
+        <!-- highlighter -->
+        <rect x="22" y="22" width="152" height="22" rx="3" fill="#ffd60a" opacity=".45"/>
+        <!-- pen underline -->
+        <path d="M28 96c18 3 44-3 70 1s40 2 52-2" fill="none" stroke="#ff453a" stroke-width="3.5" stroke-linecap="round"/>
+        <!-- rectangle -->
+        <rect x="546" y="146" width="70" height="210" rx="7" fill="none" stroke="#ff453a" stroke-width="3.5" filter="url(#sh)"/>
+        <!-- arrow (selected) -->
+        <path d="M352 196L232 88" stroke="#ff453a" stroke-width="5" stroke-linecap="round" marker-end="url(#ah)" filter="url(#sh)"/>
+      </svg>
+      <span class="hdl" style="left:352px;top:196px"></span><span class="hdl" style="left:226px;top:83px"></span>
+      <span class="num" style="left:184px;top:20px">1</span>
+      <span class="num" style="left:600px;top:130px">2</span>
+      <span class="tlabel" style="left:398px;top:150px">Best week so far</span>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="chip"><span class="ok"><svg class="ic" style="width:9px;height:9px;stroke-width:3.2"><use href="#i-check"/></svg></span><span class="p">~/Pictures/Screenshots/<b>Screenshot_2026-09-22_20-41-07.png</b></span><span class="cp"><svg class="ic sm"><use href="#i-copy"/></svg></span><span class="cp"><svg class="ic sm"><use href="#i-folder"/></svg></span></div>
+    <div class="zoom"><span class="dirty"><i></i>Unsaved changes</span><span class="ib"><svg class="ic sm"><use href="#i-minus"/></svg></span><span style="width:44px;text-align:center">100%</span><span class="ib"><svg class="ic sm"><use href="#i-plus"/></svg></span><span class="b2" style="height:24px;margin-left:6px;font-weight:500">Fit</span></div>
+  </div>
+</div>
+
+<div class="details">
+  <div class="dc">
+    <h4>Crop (C)</h4>
+    <div class="cropwrap"><div class="mini">48,210<div class="bb"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:82%"></i><i style="height:95%"></i></div></div>
+      <div class="crop"><b class="a"></b><b class="b"></b><b class="c"></b><b class="d"></b></div></div>
+    <div class="cropbar glass"><span class="f">Free <svg class="ic sm"><use href="#i-down"/></svg></span><span class="f">574 × 398</span><span class="g"></span><span class="b2">Cancel</span><span class="b1">Apply ⏎</span></div>
+  </div>
+  <div class="dc">
+    <h4>Text (T)</h4>
+    <div class="pop glass">
+      <div class="lbl">Size</div>
+      <div class="seg"><span>S</span><span class="on">M</span><span>L</span><span>XL</span></div>
+      <div class="lbl">Style</div>
+      <div class="seg"><span class="on">Filled</span><span>Plain</span><span>Outline</span></div>
+      <div class="textsamples"><span class="ts2">Filled</span><span class="ts1">Plain</span><span class="ts3">Outline</span></div>
+    </div>
+  </div>
+  <div class="dc">
+    <h4>Redact (B)</h4>
+    <div class="pop glass">
+      <div class="lbl">Mode</div>
+      <div class="seg"><span class="on">Pixelate</span><span>Blur</span><span>Solid</span></div>
+      <div class="lbl">Strength</div>
+      <div class="slider"></div>
+      <div style="font:500 11px Inter;color:rgba(255,255,255,.55);line-height:1.5">Drag over any area. The pixels are replaced in the saved file, so what's underneath can't be recovered.</div>
+    </div>
+  </div>
+</div>
+
+<div class="keys">
+  <span><kbd>V</kbd>select</span><span><kbd>A</kbd>arrow</span><span><kbd>R</kbd>rect</span><span><kbd>O</kbd>ellipse</span><span><kbd>L</kbd>line</span><span><kbd>P</kbd>pen</span><span><kbd>H</kbd>highlight</span><span><kbd>T</kbd>text</span><span><kbd>N</kbd>counter</span><span><kbd>B</kbd>redact</span><span><kbd>C</kbd>crop</span>
+  <span><kbd>Shift</kbd>straight / square</span><span><kbd>Del</kbd>delete object</span><span><kbd>Ctrl Z</kbd>undo</span><span><kbd>Ctrl C</kbd>copy path + image</span><span><kbd>Ctrl S</kbd>/<kbd>⏎</kbd> done</span><span><kbd>Esc</kbd>deselect / close</span>
+</div>
+
+<script>
+(function(){
+  const g=document.getElementById('pix'); let s=7;
+  const r=()=>{s=(s*9301+49297)%233280;return s/233280};
+  for(let i=0;i<18*3;i++){const v=150+Math.floor(r()*80);const e=document.createElement('i');e.style.background=`rgb(${v},${v},${v+8})`;g.appendChild(e)}
+})();
+</script>
+
+</body></html>

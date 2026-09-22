@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>rshot mockup: recording</title>
+<style>
+:root{--bg-primary:#f5f5f7;--bg-secondary:#fff;--bg-tertiary:#e5e5e7;--border:#d1d1d6;--text-primary:#1d1d1f;--text-secondary:#86868b;--selected-border:#0071e3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);padding:2rem;line-height:1.5}
+h2{font-size:1.5rem;font-weight:600;margin-bottom:.5rem}h3{font-size:1.1rem;font-weight:600;margin-bottom:.25rem}
+.subtitle{color:var(--text-secondary);margin-bottom:1.5rem;max-width:1100px}
+.card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+</style></head><body>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+.ic{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.ic.sm{width:13px;height:13px}
+.glass{background:rgba(40,40,46,.7);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.12);box-shadow:0 14px 44px rgba(0,0,0,.5);color:#f2f2f7}
+.desk{position:relative;aspect-ratio:16/9;max-width:1100px;border-radius:10px;overflow:hidden;font-family:Inter,system-ui;
+  background:radial-gradient(110% 90% at 85% 5%,#7a2f6b 0%,transparent 55%),radial-gradient(90% 80% at 5% 105%,#e95420 0%,transparent 55%),#2c001e}
+.topbar{position:absolute;inset:0 0 auto 0;height:3.4%;background:#000;color:#eee;font:500 10px Inter;display:flex;align-items:center;justify-content:space-between;padding:0 10px;z-index:1}
+.topbar .tray{display:flex;gap:10px;align-items:center}
+.trayrec{display:flex;align-items:center;gap:5px;background:#ff453a;color:#fff;border-radius:99px;padding:1px 7px 1px 5px;font:600 9.5px Inter}
+.trayrec i{width:7px;height:7px;border-radius:1.5px;background:#fff;display:block}
+.dock{position:absolute;left:0;top:3.4%;bottom:0;width:4.2%;background:rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;gap:6%;padding-top:1.2%;z-index:1}
+.dock i{width:62%;aspect-ratio:1;border-radius:22%;display:block}
+.win{position:absolute;border-radius:8px;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.5)}
+.tb{height:5.5%;min-height:18px;background:#2b2b2b;color:#aaa;font:500 10px Inter;display:flex;align-items:center;justify-content:center;position:relative}
+.tb::after{content:'';position:absolute;right:10px;width:9px;height:9px;border-radius:50%;background:#555;box-shadow:-14px 0 0 #555,-28px 0 0 #555}
+.code{left:5.5%;top:8%;width:52%;height:80%;background:#1e1e1e;z-index:2}
+.code .body{padding:3% 4%}
+.ln{display:flex;gap:6px;height:7px;margin:0 0 9px 0}.ln b{display:block;height:100%;border-radius:3px}
+.k{background:#569cd6}.v{background:#9cdcfe}.s{background:#ce9178}.c{background:#6a9955}.t{background:#d4d4d4}.f{background:#dcdcaa}.y{background:#4ec9b0}
+.browser{left:46%;top:14%;width:50%;height:76%;background:#fff;z-index:3}
+.tabs{height:6%;background:#dee1e6}.url{height:7%;background:#fff;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;padding:0 3%}
+.url span{height:55%;flex:1;border-radius:20px;background:#f1f3f4}
+.pg{position:absolute;background:#e9e9ee;border-radius:3px}
+.chart{position:absolute;left:55%;top:38%;width:32%;height:34%;background:#fff;border:1px solid #e6e6ea;border-radius:8px;z-index:4;padding:1.2% 1.5%;box-sizing:border-box;display:flex;flex-direction:column}
+.chart .t1{font:500 10px Inter;color:#6b6b76}.chart .t2{font:700 19px Inter;color:#18181b;margin-top:2px}
+.chart .t2 em{font:600 10px Inter;color:#16a34a;font-style:normal;margin-left:6px}
+.bars{flex:1;display:flex;align-items:flex-end;gap:5%;margin-top:6%}
+.bars i{flex:1;border-radius:3px 3px 0 0;background:linear-gradient(#8b7bff,#5b4cf0);display:block}
+
+/* recording frame */
+.recframe{position:absolute;left:45%;top:13%;width:52%;height:78%;z-index:6;border-radius:2px;outline:2px dashed rgba(255,69,58,.95);outline-offset:3px}
+.recframe .cn{position:absolute;width:16px;height:16px;border:0 solid #ff453a}
+.recframe .c1{left:-6px;top:-6px;border-width:3px 0 0 3px}.recframe .c2{right:-6px;top:-6px;border-width:3px 3px 0 0}
+.recframe .c3{left:-6px;bottom:-6px;border-width:0 0 3px 3px}.recframe .c4{right:-6px;bottom:-6px;border-width:0 3px 3px 0}
+.pill{position:absolute;z-index:10;display:flex;align-items:center;gap:10px;padding:5px 5px 5px 12px;border-radius:99px;font:600 12px Inter;white-space:nowrap}
+.pill .dot{width:9px;height:9px;border-radius:50%;background:#ff453a;box-shadow:0 0 0 4px rgba(255,69,58,.25)}
+.pill .time{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.pill .meter{display:flex;align-items:flex-end;gap:2px;height:14px;color:rgba(255,255,255,.7)}
+.pill .meter i{width:3px;border-radius:1px;background:#30d158;display:block}
+.pill .stop{height:28px;padding:0 12px 0 10px;border-radius:99px;background:#ff453a;display:flex;align-items:center;gap:7px;color:#fff}
+.pill .stop i{width:10px;height:10px;border-radius:2px;background:#fff;display:block}
+.pill .ghost{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);color:#ddd}
+.cursor{position:absolute;z-index:9;width:16px;height:16px}
+
+/* start countdown mini */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1100px;margin-top:14px}
+.mini{position:relative;height:200px;border-radius:10px;overflow:hidden;
+  background:radial-gradient(90% 140% at 0% 110%,#e95420 0%,transparent 55%),radial-gradient(80% 100% at 100% 0%,#7a2f6b 0%,transparent 60%),#2c001e}
+.mini .code{left:3%;top:-10%;width:60%;height:130%}
+.vthumb{position:absolute;right:18px;bottom:18px;width:230px;border-radius:12px;overflow:hidden;z-index:5}
+.vthumb .frame{height:118px;position:relative;background:#fff;overflow:hidden}
+.vthumb .frame .chart{left:6%;top:8%;width:88%;height:84%;padding:3% 4%}
+.vthumb .frame .chart .t1{font-size:7px}.vthumb .frame .chart .t2{font-size:12px}.vthumb .frame .chart .t2 em{font-size:7px}
+.vthumb .play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:36px;height:36px;border-radius:50%;background:rgba(20,20,24,.6);backdrop-filter:blur(8px);display:grid;place-items:center;z-index:5}
+.vthumb .play i{width:0;height:0;border-left:11px solid #fff;border-top:7px solid transparent;border-bottom:7px solid transparent;margin-left:3px}
+.vthumb .dur{position:absolute;right:7px;bottom:7px;z-index:5;font:600 10px Inter;background:rgba(20,20,24,.72);color:#fff;border-radius:5px;padding:2px 6px}
+.vthumb .foot{display:flex;align-items:center;gap:7px;padding:8px 10px;font:500 11px Inter}
+.vthumb .foot .ok{width:16px;height:16px;border-radius:50%;background:#30d158;display:grid;place-items:center;color:#062;flex-shrink:0}
+.vthumb .foot small{display:block;color:rgba(255,255,255,.55);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:96px;height:96px;border-radius:50%;display:grid;place-items:center;font:600 44px Inter;z-index:5}
+.cd small{position:absolute;bottom:-32px;font:500 11px Inter;white-space:nowrap;padding:3px 9px;border-radius:6px;background:rgba(40,40,46,.8)}
+
+/* video editor */
+.ed{max-width:1100px;height:640px;border-radius:12px;overflow:hidden;background:#1b1b1f;border:1px solid #34343a;box-shadow:0 30px 80px rgba(0,0,0,.35);display:flex;flex-direction:column;font-family:Inter,system-ui;color:#f2f2f7;margin-top:6px}
+.hdr{height:48px;flex-shrink:0;background:#232328;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;padding:0 10px 0 16px;gap:8px}
+.hdr .title{font:600 13px Inter}.hdr .meta{font:500 11.5px Inter;color:rgba(255,255,255,.45);margin-left:8px}
+.hdr .sp{flex:1}
+.ib{width:32px;height:30px;display:grid;place-items:center;border-radius:8px;color:#d9d9e0}
+.vsep{width:1px;height:20px;background:rgba(255,255,255,.12);margin:0 4px}
+.b2{height:30px;padding:0 12px;border-radius:8px;display:flex;align-items:center;gap:6px;font:600 12px Inter;background:rgba(255,255,255,.1);color:#fff}
+.b1{height:30px;padding:0 16px;border-radius:8px;display:flex;align-items:center;font:600 12px Inter;background:#0a84ff;color:#fff}
+.wx{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);margin-left:8px}
+.wx .ic{width:12px;height:12px}
+.stage{flex:1;display:grid;place-items:center;background:#141417;position:relative}
+.video{position:relative;width:600px;height:360px;background:#fff;border-radius:3px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.video .browser{left:0;top:0;width:100%;height:100%;border-radius:0;box-shadow:none}
+.video .chart{left:20%;top:32%;width:62%;height:46%;padding:2.2% 3%}
+.video .cursor{left:66%;top:58%}
+.bigplay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%;background:rgba(30,30,34,.55);backdrop-filter:blur(10px);display:grid;place-items:center;z-index:6;border:1px solid rgba(255,255,255,.15)}
+.bigplay i{width:0;height:0;border-left:17px solid #fff;border-top:11px solid transparent;border-bottom:11px solid transparent;margin-left:5px}
+.tl{flex-shrink:0;background:#232328;border-top:1px solid rgba(255,255,255,.07);padding:12px 16px 12px}
+.tlrow{display:flex;align-items:center;gap:12px}
+.pbtn{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.1);display:grid;place-items:center;flex-shrink:0}
+.pbtn i{width:0;height:0;border-left:11px solid #fff;border-top:7px solid transparent;border-bottom:7px solid transparent;margin-left:3px}
+.strip{position:relative;flex:1;height:52px;border-radius:8px;overflow:visible}
+.frames{position:absolute;inset:0;border-radius:8px;overflow:hidden;display:flex}
+.frames span{flex:1;background:#fff;border-right:1px solid #ddd;position:relative;overflow:hidden}
+.frames span::before{content:'';position:absolute;left:15%;right:15%;bottom:18%;height:40%;background:repeating-linear-gradient(90deg,#6d5df6 0 5px,transparent 5px 8px);opacity:.85}
+.frames span::after{content:'';position:absolute;left:15%;top:18%;width:40%;height:10%;background:#18181b;border-radius:2px}
+.out{position:absolute;top:0;bottom:0;background:rgba(10,10,12,.66)}
+.trim{position:absolute;top:-2px;bottom:-2px;left:14%;right:16%;border:3px solid #ffd60a;border-left-width:12px;border-right-width:12px;border-radius:8px}
+.trim::before,.trim::after{content:'';position:absolute;top:50%;width:2px;height:16px;background:rgba(0,0,0,.55);border-radius:1px;transform:translateY(-50%)}
+.trim::before{left:-7px}.trim::after{right:-7px}
+.head{position:absolute;top:-8px;bottom:-8px;left:38%;width:2px;background:#fff;border-radius:1px;box-shadow:0 0 4px rgba(0,0,0,.6)}
+.head::before{content:'';position:absolute;top:-4px;left:-5px;width:12px;height:12px;border-radius:50%;background:#fff}
+.tlmeta{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-left:46px;font:500 11.5px Inter;color:rgba(255,255,255,.55);font-variant-numeric:tabular-nums}
+.tlmeta b{color:#fff;font-weight:600}
+.tlmeta .right{display:flex;align-items:center;gap:14px}
+.tog{display:flex;align-items:center;gap:8px;color:rgba(255,255,255,.8)}
+.swt{width:30px;height:18px;border-radius:9px;background:rgba(255,255,255,.18);position:relative}
+.swt::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+.chip{display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-radius:7px;background:rgba(255,255,255,.06)}
+.chip .ok{width:15px;height:15px;border-radius:50%;background:#30d158;display:grid;place-items:center;color:#063}
+.panel{margin-bottom:34px}.panel h3{margin-bottom:2px}
+.panel p{color:var(--text-secondary);font-size:.85rem;margin-bottom:10px;max-width:1100px}
+.cap{font:600 10px Inter;letter-spacing:.06em;text-transform:uppercase;color:var(--text-secondary);margin:0 0 6px}
+</style>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M5 3l14 7-6 2-2 6z" fill="#fff" stroke="#000" stroke-width="1.4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+</svg>
+
+<template id="scene">
+  <div class="dock"><i style="background:#e95420"></i><i style="background:#3584e4"></i><i style="background:#2ec27e"></i><i style="background:#f6d32d"></i><i style="background:#9141ac"></i></div>
+  <div class="win code"><div class="tb">main.rs — rshot</div><div class="body">
+    <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:14%"></b><b class="t" style="width:4%"></b></div>
+    <div class="ln"><b class="k" style="width:7%"></b><b class="y" style="width:22%"></b></div><div class="ln"></div>
+    <div class="ln"><b class="k" style="width:5%"></b><b class="f" style="width:12%"></b><b class="t" style="width:10%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="k" style="width:6%"></b><b class="v" style="width:12%"></b><b class="t" style="width:4%"></b><b class="f" style="width:18%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="c" style="width:40%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="v" style="width:9%"></b><b class="f" style="width:14%"></b><b class="s" style="width:26%"></b></div>
+    <div class="ln" style="margin-left:5%"><b class="k" style="width:4%"></b><b class="v" style="width:10%"></b><b class="t" style="width:3%"></b></div>
+    <div class="ln" style="margin-left:10%"><b class="f" style="width:16%"></b><b class="v" style="width:8%"></b></div>
+  </div></div>
+  <div class="win browser"><div class="tabs"></div><div class="url"><span></span></div>
+    <div class="pg" style="left:3%;top:18%;width:11%;height:3%"></div><div class="pg" style="left:3%;top:25%;width:9%;height:3%"></div><div class="pg" style="left:3%;top:32%;width:10%;height:3%"></div>
+    <div class="pg" style="left:18%;top:17%;width:40%;height:5%;background:#d7d7de"></div><div class="pg" style="left:18%;top:24%;width:28%;height:3%"></div>
+    <div class="pg" style="left:18%;top:81%;width:64%;height:3%"></div><div class="pg" style="left:18%;top:87%;width:50%;height:3%"></div>
+  </div>
+  <div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div>
+</template>
+
+<h2>4 · Screen recording</h2>
+<p class="subtitle">Pick <b>Record area</b> or <b>Record screen</b> in the toolbar (or press <b>Ctrl+Alt+Shift+R</b>), select the area on the frozen screen, then recording starts on the live screen after a 3-second countdown. Output is MP4 (H.264) with an optional mic track.</p>
+
+<div class="panel">
+  <h3>4a · Recording in progress</h3>
+  <p>The screen isn't dimmed so you can keep working. A dashed red frame drawn just <i>outside</i> the area shows what's being recorded, and the controls pill sits outside it too, so neither ends up in the video. Stop with the pill, the tray icon, or the same shortcut again. For full-screen recordings the pill can't avoid being filmed, so it collapses into the tray icon after the countdown.</p>
+  <div class="desk" data-scene>
+    <div class="topbar"><span>Activities</span><span>Tue 22 Sep&nbsp; 20:44</span><span class="tray"><span class="trayrec"><i></i>0:12</span>● ● ●</span></div>
+    <div class="recframe"><span class="cn c1"></span><span class="cn c2"></span><span class="cn c3"></span><span class="cn c4"></span></div>
+    <svg class="cursor" style="left:70%;top:58%"><use href="#i-cursor"/></svg>
+    <div class="pill glass" style="right:3%;top:8.2%;transform:translateY(-50%)">
+      <span class="dot"></span><span class="time">00:12</span>
+      <span class="meter"><svg class="ic sm"><use href="#i-mic"/></svg><i style="height:5px"></i><i style="height:10px"></i><i style="height:7px"></i><i style="height:12px"></i><i style="height:4px"></i></span>
+      <span class="ghost" title="Discard"><svg class="ic sm"><use href="#i-trash"/></svg></span>
+      <span class="stop"><i></i>Stop</span>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row2">
+    <div>
+      <div class="cap">4b · 3-second countdown before recording starts</div>
+      <div class="mini"><div class="win code"><div class="tb">main.rs — rshot</div></div>
+        <div class="cd glass">3<small>Esc to cancel</small></div></div>
+    </div>
+    <div>
+      <div class="cap">4c · After Stop: video thumbnail, path copied</div>
+      <div class="mini"><div class="win code"><div class="tb">main.rs — rshot</div></div>
+        <div class="vthumb glass">
+          <div class="frame"><div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div>
+            <span class="play"><i></i></span><span class="dur">0:34</span></div>
+          <div class="foot"><span class="ok"><svg class="ic sm" style="width:10px;height:10px;stroke-width:3"><use href="#i-check"/></svg></span><div style="min-width:0">Path copied<small>~/Videos/Screencasts/Recording_2026-09-22_20-44-51.mp4</small></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>4d · Video editor: trim</h3>
+  <p>Click the video thumbnail to open this. Drag the yellow handles to trim the start and end. <b>Done</b> saves over the same file, so the copied path stays valid. Copying the video puts the path and the file on the clipboard; the image format doesn't apply to video.</p>
+  <div class="ed">
+    <div class="hdr">
+      <span class="title">Recording_2026-09-22_20-44-51.mp4</span><span class="meta">0:34 · 1280 × 720 · MP4</span>
+      <span class="sp"></span>
+      <span class="ib"><svg class="ic"><use href="#i-trash"/></svg></span>
+      <span class="b2"><svg class="ic sm"><use href="#i-copy"/></svg>Copy</span>
+      <span class="b1">Done</span>
+      <span class="wx"><svg class="ic"><use href="#i-x"/></svg></span>
+    </div>
+    <div class="stage">
+      <div class="video"><div class="win browser"><div class="tabs"></div><div class="url"><span></span></div>
+        <div class="pg" style="left:3%;top:18%;width:11%;height:3%"></div><div class="pg" style="left:3%;top:25%;width:9%;height:3%"></div>
+        <div class="pg" style="left:20%;top:17%;width:40%;height:5%;background:#d7d7de"></div><div class="pg" style="left:20%;top:24%;width:28%;height:3%"></div></div>
+        <div class="chart"><div class="t1">Weekly active users</div><div class="t2">48,210<em>▲ 12.4%</em></div><div class="bars"><i style="height:35%"></i><i style="height:48%"></i><i style="height:42%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:70%"></i><i style="height:66%"></i><i style="height:82%"></i><i style="height:78%"></i><i style="height:95%"></i></div></div>
+        <svg class="cursor"><use href="#i-cursor"/></svg>
+        <span class="bigplay"><i></i></span>
+      </div>
+    </div>
+    <div class="tl">
+      <div class="tlrow">
+        <span class="pbtn"><i></i></span>
+        <div class="strip">
+          <div class="frames"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          <div class="out" style="left:0;width:14%;border-radius:8px 0 0 8px"></div><div class="out" style="right:0;width:16%;border-radius:0 8px 8px 0"></div>
+          <div class="trim"></div>
+          <div class="head"></div>
+        </div>
+      </div>
+      <div class="tlmeta">
+        <span><b>0:12.9</b> / 0:34.0 &nbsp;·&nbsp; keeping <b>0:04.8 → 0:28.6</b> (23.8 s)</span>
+        <span class="right"><span class="tog">Mute audio<span class="swt"></span></span>
+          <span class="chip"><span class="ok"><svg class="ic" style="width:9px;height:9px;stroke-width:3.2"><use href="#i-check"/></svg></span>~/Videos/Screencasts/Recording_2026-09-22_20-44-51.mp4<svg class="ic sm"><use href="#i-folder"/></svg></span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.desk[data-scene]').forEach(d => d.prepend(document.getElementById('scene').content.cloneNode(true)));
+</script>
+
+</body></html>
