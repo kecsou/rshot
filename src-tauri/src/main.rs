@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod cli;
+mod store;
 mod ui;
 
 use tauri::{AppHandle, RunEvent};
@@ -8,6 +9,16 @@ use tauri::{AppHandle, RunEvent};
 /// Error adapter for IPC: every command error is a `String`.
 pub fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
+}
+
+pub struct AppState {
+    pub config: std::sync::Mutex<store::Config>,
+}
+
+impl AppState {
+    fn new() -> Self {
+        Self { config: std::sync::Mutex::new(store::load_config()) }
+    }
 }
 
 fn main() {
@@ -25,6 +36,7 @@ fn main() {
                 Err(e) => eprintln!("rshot: {e}"),
             }
         }))
+        .manage(AppState::new())
         .setup(move |app| {
             ui::create_tray(app.handle())?;
             dispatch(app.handle(), cmd);
