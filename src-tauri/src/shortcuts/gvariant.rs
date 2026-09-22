@@ -34,19 +34,24 @@ pub fn format_strv(v: &[String]) -> String {
 }
 
 /// "Ctrl+Alt+Shift+R" → "<Ctrl><Alt><Shift>R" (GTK accelerator syntax).
-pub fn to_gnome_accel(neutral: &str) -> String {
+pub fn to_gnome_accel(neutral: &str) -> Result<String, String> {
+    let bad = || format!("unsupported shortcut {neutral:?}");
     let parts: Vec<&str> = neutral.split('+').collect();
     let (key, mods) = parts.split_last().expect("split always yields one part");
-    let mods: String = mods
-        .iter()
-        .map(|m| match *m {
+    if key.is_empty() {
+        return Err(bad());
+    }
+    let mut out = String::new();
+    for m in mods {
+        out.push_str(match *m {
             "Ctrl" => "<Ctrl>",
             "Alt" => "<Alt>",
             "Shift" => "<Shift>",
-            _ => "<Super>",
-        })
-        .collect();
-    format!("{mods}{key}")
+            "Super" => "<Super>",
+            _ => return Err(bad()),
+        });
+    }
+    Ok(out + key)
 }
 
 /// Adds `ours` to a custom-keybindings list without duplicates, keeping everything else.
@@ -91,10 +96,17 @@ mod tests {
 
     #[test]
     fn converts_accelerators() {
-        assert_eq!(to_gnome_accel("Print"), "Print");
-        assert_eq!(to_gnome_accel("Shift+Print"), "<Shift>Print");
-        assert_eq!(to_gnome_accel("Ctrl+Alt+Shift+R"), "<Ctrl><Alt><Shift>R");
-        assert_eq!(to_gnome_accel("Super+4"), "<Super>4");
+        assert_eq!(to_gnome_accel("Print").unwrap(), "Print");
+        assert_eq!(to_gnome_accel("Shift+Print").unwrap(), "<Shift>Print");
+        assert_eq!(to_gnome_accel("Ctrl+Alt+Shift+R").unwrap(), "<Ctrl><Alt><Shift>R");
+        assert_eq!(to_gnome_accel("Super+4").unwrap(), "<Super>4");
+    }
+
+    #[test]
+    fn rejects_unknown_modifiers_and_empty_keys() {
+        for bad in ["Hyper+Print", "Cmd+R", "+Print", "Ctrl+", "Ctrl++", ""] {
+            assert!(to_gnome_accel(bad).is_err(), "{bad:?} should be rejected");
+        }
     }
 
     #[test]

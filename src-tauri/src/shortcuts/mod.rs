@@ -43,12 +43,39 @@ pub fn restore_from_cli() -> Result<(), String> {
     store::save_config(&c).map_err(|e| e.to_string())
 }
 
+/// `"exe" sub`, quoted by the Desktop Entry Exec rules GNOME applies to custom shortcuts
+/// (`g_app_info_create_from_commandline`): `%` is a field code, and `"`, `` ` ``, `$`, `\`
+/// need a backslash inside double quotes.
+pub fn command_for(exe: &str, sub: &str) -> String {
+    let mut q = String::new();
+    for c in exe.chars() {
+        match c {
+            '"' | '`' | '$' | '\\' => q.extend(['\\', c]),
+            '%' => q.push_str("%%"),
+            _ => q.push(c),
+        }
+    }
+    format!("\"{q}\" {sub}")
+}
+
 /// (shortcut, command) pairs to bind by hand on desktops rshot can't configure.
 pub fn manual_commands(c: &Config) -> Vec<(String, String)> {
     let exe = exe_command();
     vec![
-        (c.shortcuts.area.clone(), format!("\"{exe}\" capture area")),
-        (c.shortcuts.screen.clone(), format!("\"{exe}\" capture screen")),
-        (c.shortcuts.window.clone(), format!("\"{exe}\" capture window")),
+        (c.shortcuts.area.clone(), command_for(&exe, "capture area")),
+        (c.shortcuts.screen.clone(), command_for(&exe, "capture screen")),
+        (c.shortcuts.window.clone(), command_for(&exe, "capture window")),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn commands_survive_exec_parsing() {
+        assert_eq!(super::command_for("/usr/bin/rshot", "capture area"), r#""/usr/bin/rshot" capture area"#);
+        assert_eq!(
+            super::command_for(r#"/my apps/$x"`\100%/rshot"#, "capture screen"),
+            r#""/my apps/\$x\"\`\\100%%/rshot" capture screen"#
+        );
+    }
 }
