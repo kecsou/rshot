@@ -1,6 +1,6 @@
 import '../shared/glass.css';
 import './overlay.css';
-import { listen } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { mountIcons } from '../shared/icons';
 import * as ipc from '../shared/ipc';
 import { type Handle, type Rect, clamp, fromPoints, handleAt, move, resize, windowAt } from './selection';
@@ -36,6 +36,7 @@ let sel: Rect | null = null; // image pixels
 let drag: Drag | null = null;
 let pointer: [number, number] | null = null; // image pixels
 let busy = false;
+let hides = 0; // bumped on overlay:hide so an in-flight load() of that session drops its frame
 
 // Keep: non-active overlays wait for overlay:primary-ready (Task 6 perf gate): the overlay under the
 // pointer gets the IPC bandwidth first, the others fetch their frames once it has painted (or after 500 ms).
@@ -63,12 +64,13 @@ const place = (el: HTMLElement, r: Rect) => {
 };
 
 async function load() {
+  const gen = hides;
   const next = await ipc.overlayInfo();
   if (!next) return;
   latest = Math.max(latest, next.token);
   if (!next.active) await afterPrimary(next.token);
   const buf = await ipc.overlayFrame();
-  if (next.token < latest) return; // a newer session started while this one waited
+  if (next.token < latest || hides !== gen) return; // a newer session started, or this one ended, while it waited
   info = next;
   pixels = new Uint8ClampedArray(buf);
   canvas.width = next.width;
@@ -142,6 +144,7 @@ function setMode(m: Mode) {
   mode = m;
   closeOptions();
   render();
+  void emit('overlay:mode', m); // every monitor follows the mode
 }
 
 function captureNow() {
@@ -157,7 +160,9 @@ async function capture(target: ipc.Target) {
   if (!info || busy) return;
   busy = true;
   // Rust hides the overlays, reports failures as a notification, and resets on the next show.
-  await ipc.overlayCapture(info.token, target).catch(() => {});
+  await ipc.overlayCapture(info.token, target).catch(() => {
+    busy = false; // e.g. an IPC-level rejection: keep Esc working
+  });
 }
 
 addEventListener('mousedown', (e) => {
@@ -231,7 +236,12 @@ bar.addEventListener('click', (e) => {
   else if (b.dataset.act === 'options') toggleOptions();
 });
 
-void listen<number>('overlay:show', () => void load());
+void listen<number>('overlay:show', () => void load().catch(() => {}));
+void listen<Mode>('overlay:mode', (e) => {
+  mode = e.payload;
+  if (mode !== 'area') drag = null;
+  render();
+});
 void listen<number>('overlay:active', (e) => {
   if (!info) return;
   info.active = e.payload === info.index;
@@ -239,6 +249,7 @@ void listen<number>('overlay:active', (e) => {
   render();
 });
 void listen('overlay:hide', () => {
+  hides++;
   info = null;
   pixels = null;
   sel = null;
@@ -246,4 +257,4 @@ void listen('overlay:hide', () => {
   canvas.width = canvas.height = 0;
   closeOptions();
 });
-void load();
+void load().catch(() => {}); // e.g. overlay_frame's "no frame" once the session has ended
