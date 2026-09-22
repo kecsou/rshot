@@ -5,6 +5,7 @@ mod cli;
 mod clipboard;
 mod overlay;
 mod pipeline;
+mod shortcuts;
 mod store;
 mod thumbnail;
 mod ui;
@@ -53,6 +54,15 @@ fn main() {
         eprintln!("{e}");
         std::process::exit(2)
     });
+    if cmd == cli::Cmd::RestoreShortcuts {
+        std::process::exit(match shortcuts::restore_from_cli() {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("rshot: {e}");
+                1
+            }
+        });
+    }
     #[cfg(target_os = "linux")]
     if !matches!(cmd, cli::Cmd::Daemon | cli::Cmd::RestoreShortcuts) && forward_to_daemon() {
         return;
