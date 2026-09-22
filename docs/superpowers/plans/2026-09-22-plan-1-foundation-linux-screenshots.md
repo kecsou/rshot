@@ -36,6 +36,20 @@
 - Run `cargo` commands from `src-tauri/` and `npm` commands from the repo root.
 - Some `cargo` steps (release builds, `generate_context!` in CI) need a built frontend, so run `npm run build` once first. Task 1 does this.
 
+## Environment notes (the author's machine, read before any task)
+
+- **Autonomous run.** The user is away. Don't wait for approval between tasks. Where a step says "ask the user", do the closest safe thing yourself and record what you did.
+- **No `sudo`.**
+  - Every build dependency is installed, except `xdotool` and the `libxcb-randr0-dev` symlink. The build links fine without the symlink.
+  - Instead of `xdotool`, use the repo's `scripts/xdo.py` (XTest via ctypes):
+    - `xdotool key X` → `python3 scripts/xdo.py key X`
+    - `xdotool getactivewindow getwindowname` → `python3 scripts/xdo.py active`
+    - `xdotool search --onlyvisible --name 'N' | wc -l` → `python3 scripts/xdo.py visible 'N'`
+  - In Task 1 Step 1, check only `pkg-config` and `clang`.
+  - In Task 13, don't `apt install` the `.deb`. Check it with `dpkg-deb -I`/`-c` and run `src-tauri/target/release/rshot` directly. Test the prerm logic by calling `rshot restore-shortcuts` yourself.
+- **Leave the desktop as you found it.** After any test that takes over GNOME shortcuts, run `rshot restore-shortcuts` and confirm `gsettings get org.gnome.shell.keybindings show-screenshot-ui` returns `['Print']`. Restore `~/.config/rshot/config.toml` if a step moved it.
+- **Self-sufficient `.deb`.** The package may depend only on libraries every stock Ubuntu desktop already has. Anything else gets bundled.
+
 ## Prerequisites (the user runs these once, before Task 1)
 
 ```bash

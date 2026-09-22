@@ -155,8 +155,9 @@ the editor. Dragging it drops the file into other apps. Swiping it right dismiss
   - Config: `serde` + `toml`, `dirs`.
   - Per OS: `windows` (low-level keyboard hook) and `objc2*` (macOS extras) only where needed.
 - ffmpeg is an **external program**:
-  - Linux uses the system `ffmpeg` (the `.deb` and `.rpm` depend on it).
-  - Windows and macOS ship a pinned static build as a Tauri sidecar (`externalBin`).
+  - Every platform, Linux included, ships a pinned static build as a Tauri sidecar
+    (`externalBin`). Installers must be self-sufficient: they may depend only on libraries every
+    stock desktop of that OS already has.
   - If no ffmpeg is found, the Record buttons are disabled with a tooltip explaining why.
 
 ### 3.2 Process model
@@ -231,7 +232,7 @@ magnifier can read pixel colours.
 ### 3.7 Packaging and distribution
 | Target | Artefacts | Notes |
 |---|---|---|
-| Linux | `.deb` (Depends: ffmpeg, libwebkit2gtk-4.1-0, libayatana-appindicator3-1), `.rpm`, AppImage | built on ubuntu-22.04 for glibc reach; `prerm` restores shortcuts best-effort for logged-in users (per-user `gsettings` through their session bus) |
+| Linux | `.deb` (Depends only on libraries present on stock Ubuntu desktops: libwebkit2gtk-4.1-0, libayatana-appindicator3-1, libpipewire, libgbm1; ffmpeg is bundled), `.rpm`, AppImage | built on ubuntu-22.04 for glibc reach; `prerm` restores shortcuts best-effort for logged-in users (per-user `gsettings` through their session bus) |
 | Windows | NSIS `.exe`, per-user install | ffmpeg sidecar; the uninstall hook runs `rshot restore-shortcuts`; WebView2 bootstrapper |
 | macOS | `.dmg`, universal binary | ffmpeg sidecar (per-arch static builds lipo'd); unsigned until the owner provides certificates; README documents the restore command, since drag-to-Trash runs no hook |
 
