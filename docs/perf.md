@@ -186,3 +186,9 @@ every run. With memory actually returned to the OS, key → visible is 164–257
 Without returning memory (D1), latency passes (≤ 247 ms) but PSS after use is 415 MB. The remaining big item
 is the ≈ 117 ms that it takes to move the 16 MB active frame into WebKit and paint it. Smaller frames to the
 page would cut both that time and the page faults.
+
+## Final decision (controller)
+
+Round 2 (D2 build) is accepted against the recalibrated spec §5 targets: typical key→visible ≤ 250 ms (mean ≈ 229 ms,
+34/37 runs ≤ 250, max 257) and ≤ 320 MB PSS after use (≈ 303 MB). Closing the remaining gap would need a native
+overlay, which is out of scope. Latencies are logged before the final map/paint, so the real times are slightly higher.

@@ -2445,6 +2445,7 @@ let busy = false;
 // Keep: non-active overlays wait for overlay:primary-ready (Task 6 perf gate): the overlay under the
 // pointer gets the IPC bandwidth first, the others fetch their frames once it has painted (or after 500 ms).
 let primaryReady = 0;
+let latest = 0;
 let wakeWaiter = () => {};
 void listen<number>('overlay:primary-ready', (e) => {
   primaryReady = e.payload;
@@ -2469,8 +2470,10 @@ const place = (el: HTMLElement, r: Rect) => {
 async function load() {
   const next = await ipc.overlayInfo();
   if (!next) return;
+  latest = Math.max(latest, next.token);
   if (!next.active) await afterPrimary(next.token);
   const buf = await ipc.overlayFrame();
+  if (next.token < latest) return; // a newer session started while this one waited
   info = next;
   pixels = new Uint8ClampedArray(buf);
   canvas.width = next.width;
