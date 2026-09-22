@@ -47,8 +47,12 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
         if let Err(e) = crate::ui::show_thumbnail(app) {
             eprintln!("rshot: thumbnail: {e}");
         }
-    } else if copied.is_err() {
-        notify(app, "Screenshot saved, but copying to the clipboard failed");
+    } else {
+        // An older card would otherwise linger with actions the guard now refuses.
+        crate::ui::close_prefix(app, "thumbnail");
+        if copied.is_err() {
+            notify(app, "Screenshot saved, but copying to the clipboard failed");
+        }
     }
     Ok(path)
 }

@@ -65,7 +65,7 @@ async function run() {
 
   // Click → open; drag right → swipe away; any other drag → drag the file into another app.
   card.addEventListener('pointerdown', (e) => {
-    if ((e.target as Element).closest('button')) return;
+    if (e.button !== 0 || (e.target as Element).closest('button')) return;
     const sx = e.clientX;
     const sy = e.clientY;
     let mode: 'none' | 'swipe' | 'file' = 'none';
@@ -99,4 +99,5 @@ async function run() {
   });
 }
 
-void run();
+// A card that failed to load has no timer or handlers: close it rather than strand it on top.
+void run().catch(() => ipc.dismissThumbnail());

@@ -1,6 +1,6 @@
 //! Commands behind the floating thumbnail. Paths coming from the webview are checked first.
 
-use crate::{err, store, ui, AppState};
+use crate::{err, ui, AppState};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use tauri::{ipc::Response, AppHandle, Manager, State};
@@ -21,16 +21,19 @@ pub fn tildify(p: &Path) -> String {
     }
 }
 
-/// Only files rshot saved may be read, opened or deleted from a webview.
+/// Only the last capture may be read, opened or deleted from a webview. Both paths are canonical.
+/// (The screenshots folder is settable from a webview, so "anything in it" would be a hole.)
+fn allowed(p: &Path, last: Option<&Path>) -> bool {
+    last == Some(p)
+}
+
 fn guard(state: &AppState, path: &str) -> Result<PathBuf, String> {
     let p = Path::new(path).canonicalize().map_err(err)?;
-    let dir = store::screenshots_dir(&state.config.lock().unwrap()).canonicalize().ok();
     let last = state.last_capture.lock().unwrap().as_ref().and_then(|l| l.canonicalize().ok());
-    let inside = dir.is_some_and(|d| p.starts_with(d));
-    if inside || last.as_deref() == Some(p.as_path()) {
+    if allowed(&p, last.as_deref()) {
         Ok(p)
     } else {
-        Err("not an rshot capture".into())
+        Err("not the last capture".into())
     }
 }
 
@@ -84,6 +87,22 @@ pub fn dismiss_thumbnail(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_the_last_capture_is_allowed() {
+        let dir = std::env::temp_dir().join(format!("rshot-guard-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        for f in ["last.png", "other.png"] {
+            std::fs::write(dir.join(f), b"x").unwrap();
+        }
+        let canon = |p: std::path::PathBuf| p.canonicalize().unwrap();
+        let last = canon(dir.join("last.png"));
+        assert!(super::allowed(&canon(dir.join("sub/../last.png")), Some(&last)));
+        assert!(!super::allowed(&canon(dir.join("other.png")), Some(&last)));
+        assert!(!super::allowed(&canon(dir.join("sub/../other.png")), Some(&last)));
+        assert!(!super::allowed(&last, None));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn tildify_shortens_home_only() {
         let home = dirs::home_dir().unwrap();
