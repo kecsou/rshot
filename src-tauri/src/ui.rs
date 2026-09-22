@@ -98,3 +98,23 @@ pub fn hide_overlays(app: &AppHandle) {
     }
     let _ = app.emit("overlay:hide", ());
 }
+
+/// Presents a window with a fresh X server timestamp so Mutter grants it focus. A re-shown
+/// preloaded overlay otherwise carries its last user time (the previous Esc), which is older than
+/// the window focused since, so focus-stealing prevention keeps focus away from it.
+#[cfg(target_os = "linux")]
+pub fn force_focus(w: &WebviewWindow) {
+    let w2 = w.clone();
+    let _ = w.run_on_main_thread(move || {
+        use gtk::prelude::*;
+        if let Ok(gw) = w2.gtk_window() {
+            if let Some(gdk) = gw.window() {
+                if let Ok(x11) = gdk.downcast::<gdkx11::X11Window>() {
+                    let t = gdkx11::functions::x11_get_server_time(&x11);
+                    x11.set_user_time(t);
+                    gw.present_with_time(t);
+                }
+            }
+        }
+    });
+}

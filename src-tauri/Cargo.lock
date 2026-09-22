@@ -3509,6 +3509,8 @@ dependencies = [
  "chrono",
  "clipboard-rs",
  "dirs 7.0.0",
+ "gdkx11",
+ "gtk",
  "image",
  "serde",
  "serde_json",

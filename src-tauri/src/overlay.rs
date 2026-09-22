@@ -151,6 +151,8 @@ pub fn overlay_ready(window: WebviewWindow, state: State<'_, AppState>, token: u
     window.show().map_err(err)?;
     if index == s.active {
         window.set_focus().map_err(err)?;
+        #[cfg(target_os = "linux")]
+        ui::force_focus(&window);
         eprintln!("rshot: overlay visible at {} ({} ms after trigger)", epoch_ms(), s.started.elapsed().as_millis());
     }
     Ok(())
