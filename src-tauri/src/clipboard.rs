@@ -37,6 +37,10 @@ impl Clipboard {
 
     /// Image only — used when saving failed, so the capture isn't lost.
     pub fn copy_image(&self, png: &[u8]) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        if !fits_x11(png) {
+            return Err("image too large for the X11 clipboard".into());
+        }
         self.set(image_only(png))
     }
 
@@ -62,10 +66,15 @@ pub fn file_uri(path: &Path) -> String {
     s
 }
 
-// ponytail: 15 MB image/png ceiling, since clipboard-rs lacks X11 INCR and a bigger property kills
+// ponytail: 15 MiB image/png ceiling, since clipboard-rs lacks X11 INCR and a bigger property kills
 // its serving thread; add INCR or a chunked writer if huge captures must paste as images.
 #[cfg(target_os = "linux")]
 const MAX_X11_PNG: usize = 15 * 1024 * 1024;
+
+#[cfg(target_os = "linux")]
+fn fits_x11(png: &[u8]) -> bool {
+    png.len() <= MAX_X11_PNG
+}
 
 /// X11 targets rshot serves, in order.
 #[cfg(target_os = "linux")]
@@ -79,7 +88,7 @@ pub fn linux_formats(path: &Path, png: Option<&[u8]>) -> Vec<(&'static str, Vec<
         ("text/uri-list", format!("{uri}\r\n").into_bytes()),
         ("x-special/gnome-copied-files", format!("copy\n{uri}").into_bytes()),
     ];
-    if let Some(p) = png.filter(|p| p.len() <= MAX_X11_PNG) {
+    if let Some(p) = png.filter(|p| fits_x11(p)) {
         v.push(("image/png", p.to_vec()));
     }
     v
@@ -159,6 +168,12 @@ mod tests {
         let names: Vec<&str> = f.iter().map(|(n, _)| *n).collect();
         assert!(!names.contains(&"image/png"));
         assert!(names.contains(&"UTF8_STRING") && names.contains(&"text/uri-list"));
+    }
+
+    #[test]
+    fn x11_png_ceiling_is_inclusive() {
+        assert!(fits_x11(&vec![0u8; MAX_X11_PNG]));
+        assert!(!fits_x11(&vec![0u8; MAX_X11_PNG + 1]));
     }
 
     #[test]

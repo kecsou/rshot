@@ -42,10 +42,11 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
 
 pub fn capture_screen_now(app: &AppHandle) -> Result<(), String> {
     let show_pointer = app.state::<AppState>().config.lock().unwrap().show_pointer;
-    let mut frames = capture::grab_all(show_pointer)?;
+    let frames = capture::grab_all(show_pointer)?;
     let pos = app.cursor_position().map_err(err)?;
     let i = capture::frame_at(&frames, pos.x as i32, pos.y as i32);
-    finish_capture(app, frames.swap_remove(i).image).map(|_| ())
+    let frame = frames.into_iter().nth(i).ok_or("no monitor found")?;
+    finish_capture(app, frame.image).map(|_| ())
 }
 
 pub fn capture_window_now(app: &AppHandle) -> Result<(), String> {
