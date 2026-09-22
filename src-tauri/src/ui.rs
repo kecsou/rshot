@@ -15,14 +15,18 @@ use gtk::prelude::*;
 
 pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     let item = |id: &str, text: &str| MenuItem::with_id(app, id, text, true, None::<&str>);
-    let sep = tauri::menu::PredefinedMenuItem::separator(app)?;
+    let sep = || tauri::menu::PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
         app,
         &[
             &item("area", "Capture Area")?,
             &item("screen", "Capture Screen")?,
             &item("window", "Capture Window")?,
-            &sep,
+            &sep()?,
+            &item("last", "Open Last Capture")?,
+            &item("folder", "Open Screenshots Folder")?,
+            &sep()?,
+            &item("settings", "Settings…")?,
             &item("quit", "Quit rshot")?,
         ],
     )?;
@@ -31,22 +35,77 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         .tooltip("rshot")
         .menu(&menu)
         .on_menu_event(|app, e| {
-            let cmd = match e.id.as_ref() {
+            let result = match e.id.as_ref() {
                 "quit" => return app.exit(0),
-                "area" => Cmd::CaptureArea,
-                "screen" => Cmd::CaptureScreen,
-                "window" => Cmd::CaptureWindow,
-                _ => return,
+                "settings" => open_settings(app),
+                "last" => open_last(app),
+                "folder" => open_folder(app),
+                id => {
+                    let cmd = match id {
+                        "area" => Cmd::CaptureArea,
+                        "screen" => Cmd::CaptureScreen,
+                        "window" => Cmd::CaptureWindow,
+                        _ => return,
+                    };
+                    let app = app.clone();
+                    // Let the tray menu close so it isn't in the capture.
+                    std::thread::spawn(move || {
+                        std::thread::sleep(Duration::from_millis(300));
+                        crate::dispatch(&app, cmd);
+                    });
+                    Ok(())
+                }
             };
-            let app = app.clone();
-            // Wait for the closing menu to leave the screen before grabbing it.
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(300));
-                crate::dispatch(&app, cmd);
-            });
+            if let Err(e) = result {
+                crate::pipeline::notify(app, &e);
+            }
         })
         .build(app)?;
     Ok(())
+}
+
+fn open_last(app: &AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let last = app.state::<crate::AppState>().last_capture.lock().unwrap().clone();
+    let path = last.ok_or("No capture yet")?;
+    app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(err)
+}
+
+fn open_folder(app: &AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = crate::store::screenshots_dir(&app.state::<crate::AppState>().config.lock().unwrap());
+    std::fs::create_dir_all(&dir).map_err(err)?;
+    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(err)
+}
+
+fn dialog_window(app: &AppHandle, label: &str, page: &str, title: &str, w: f64, h: f64) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window(label) {
+        win.show().map_err(err)?;
+        // A plain set_focus loses to Mutter's focus-stealing prevention (window stays buried).
+        #[cfg(target_os = "linux")]
+        force_focus(&win);
+        #[cfg(not(target_os = "linux"))]
+        win.set_focus().map_err(err)?;
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
+        .title(title)
+        .decorations(false)
+        .transparent(true)
+        .resizable(false)
+        .inner_size(w, h)
+        .center()
+        .build()
+        .map(|_| ())
+        .map_err(err)
+}
+
+pub fn open_settings(app: &AppHandle) -> Result<(), String> {
+    dialog_window(app, "settings", "settings/index.html", "rshot Settings", 720.0, 680.0)
+}
+
+pub fn open_onboarding(app: &AppHandle) -> Result<(), String> {
+    dialog_window(app, "onboarding", "onboarding/index.html", "Welcome to rshot", 480.0, 360.0)
 }
 
 pub fn overlay_index(label: &str) -> Option<usize> {

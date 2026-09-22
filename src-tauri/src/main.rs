@@ -5,12 +5,13 @@ mod cli;
 mod clipboard;
 mod overlay;
 mod pipeline;
+mod settings;
 mod shortcuts;
 mod store;
 mod thumbnail;
 mod ui;
 
-use tauri::{AppHandle, RunEvent};
+use tauri::{AppHandle, Manager, RunEvent};
 
 /// Error adapter for IPC: every command error is a `String`.
 pub fn err(e: impl std::fmt::Display) -> String {
@@ -89,6 +90,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         .invoke_handler(tauri::generate_handler![
             overlay::overlay_info,
             overlay::overlay_frame,
@@ -108,10 +110,18 @@ fn main() {
             thumbnail::delete_capture,
             thumbnail::retry_copy,
             thumbnail::dismiss_thumbnail,
+            settings::get_settings,
+            settings::set_settings,
+            settings::onboarding_choice,
+            settings::open_config,
+            settings::close_window,
         ])
         .setup(move |app| {
             ui::create_tray(app.handle())?;
             ui::ensure_overlays(app.handle())?;
+            if !app.state::<AppState>().config.lock().unwrap().onboarded {
+                ui::open_onboarding(app.handle())?;
+            }
             dispatch(app.handle(), cmd);
             Ok(())
         })

@@ -41,3 +41,23 @@ export const openCapture = (path: string) => invoke<void>('open_capture', { path
 export const deleteCapture = (path: string) => invoke<void>('delete_capture', { path });
 export const retryCopy = (path: string) => invoke<void>('retry_copy', { path });
 export const dismissThumbnail = () => invoke<void>('dismiss_thumbnail');
+
+export type ClipboardMode = 'path-and-image' | 'path-only';
+export type Shortcuts = { area: string; screen: string; window: string };
+export type Settings = {
+  launch_at_login: boolean;
+  screenshots_dir: string;
+  clipboard_mode: ClipboardMode;
+  show_thumbnail: boolean;
+  shutter_sound: boolean;
+  takeover: boolean;
+  shortcuts: Shortcuts;
+  takeover_error: string | null;
+  manual: [string, string][];
+};
+export type BoolSetting = 'launch_at_login' | 'show_thumbnail' | 'shutter_sound' | 'takeover';
+export const getSettings = () => invoke<Settings>('get_settings');
+export const setSettings = (settings: Settings) => invoke<Settings>('set_settings', { settings });
+export const onboardingChoice = (accept: boolean) => invoke<void>('onboarding_choice', { accept });
+export const openConfig = () => invoke<void>('open_config');
+export const closeWindow = () => invoke<void>('close_window');

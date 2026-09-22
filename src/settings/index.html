@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>rshot Settings</title>
+  </head>
+  <body>
+    <div class="win">
+      <header data-tauri-drag-region>rshot Settings<button class="wx" id="close" data-icon="i-x" aria-label="Close"></button></header>
+      <main>
+        <section>
+          <h5>General</h5>
+          <div class="box">
+            <div class="row"><span class="l">Launch at login</span><button class="switch" role="switch" data-key="launch_at_login" aria-label="Launch at login"></button></div>
+            <div class="row"><span class="l">Screenshots folder</span><button class="fld" id="folder"><svg class="ic" aria-hidden="true"><use href="#i-folder" /></svg><span></span></button></div>
+          </div>
+        </section>
+        <section>
+          <h5>After capture</h5>
+          <div class="box">
+            <div class="row">
+              <span class="l">Clipboard<small>Path + image: terminals get the path, chat apps get the image</small></span>
+              <div class="seg" id="clip"><button data-v="path-and-image">Path + image</button><button data-v="path-only">Path only</button></div>
+            </div>
+            <div class="row"><span class="l">Show floating thumbnail</span><button class="switch" role="switch" data-key="show_thumbnail" aria-label="Show floating thumbnail"></button></div>
+            <div class="row"><span class="l">Shutter sound</span><button class="switch" role="switch" data-key="shutter_sound" aria-label="Shutter sound"></button></div>
+          </div>
+        </section>
+        <section>
+          <h5>Shortcuts</h5>
+          <div class="box">
+            <div class="row">
+              <span class="l">Take over system screenshot shortcuts<small>Turning this off gives the shortcuts back to GNOME Screenshot</small></span>
+              <button class="switch" role="switch" data-key="takeover" aria-label="Take over system screenshot shortcuts"></button>
+            </div>
+            <div class="row err" id="err" hidden></div>
+            <div class="row"><span class="l">Capture area</span><button class="keys" data-shortcut="area"></button></div>
+            <div class="row"><span class="l">Capture screen</span><button class="keys" data-shortcut="screen"></button></div>
+            <div class="row"><span class="l">Capture window</span><button class="keys" data-shortcut="window"></button></div>
+          </div>
+        </section>
+        <footer><span id="version"></span><button class="link" id="config">Open config file</button></footer>
+      </main>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

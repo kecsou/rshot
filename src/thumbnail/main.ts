@@ -1,3 +1,4 @@
+import '../shared/base';
 import '../shared/glass.css';
 import './thumbnail.css';
 import { startDrag } from '@crabnebula/tauri-plugin-drag';

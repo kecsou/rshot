@@ -1,3 +1,4 @@
+import '../shared/base';
 import '../shared/glass.css';
 import { invoke } from '@tauri-apps/api/core';
 

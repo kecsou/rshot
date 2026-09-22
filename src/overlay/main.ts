@@ -1,3 +1,4 @@
+import '../shared/base';
 import '../shared/glass.css';
 import './overlay.css';
 import { emit, listen } from '@tauri-apps/api/event';
