@@ -28,7 +28,12 @@ impl Clipboard {
     }
 
     /// PathAndImage: path text + file (+ PNG when given). PathOnly: the path text alone (spec §2.4).
-    pub fn copy_capture(&self, path: &Path, png: Option<&[u8]>, mode: ClipboardMode) -> Result<(), String> {
+    pub fn copy_capture(
+        &self,
+        path: &Path,
+        png: Option<&[u8]>,
+        mode: ClipboardMode,
+    ) -> Result<(), String> {
         match mode {
             ClipboardMode::PathAndImage => self.set(contents(path, png)),
             ClipboardMode::PathOnly => self.set(text_only(path)),
@@ -86,7 +91,10 @@ pub fn linux_formats(path: &Path, png: Option<&[u8]>) -> Vec<(&'static str, Vec<
         ("text/plain;charset=utf-8", text.clone()),
         ("text/plain", text),
         ("text/uri-list", format!("{uri}\r\n").into_bytes()),
-        ("x-special/gnome-copied-files", format!("copy\n{uri}").into_bytes()),
+        (
+            "x-special/gnome-copied-files",
+            format!("copy\n{uri}").into_bytes(),
+        ),
     ];
     if let Some(p) = png.filter(|p| fits_x11(p)) {
         v.push(("image/png", p.to_vec()));
@@ -119,7 +127,10 @@ fn text_only(path: &Path) -> Vec<ClipboardContent> {
 #[cfg(not(target_os = "linux"))]
 fn contents(path: &Path, png: Option<&[u8]>) -> Vec<ClipboardContent> {
     let p = path.to_string_lossy().into_owned();
-    let mut v = vec![ClipboardContent::Text(p.clone()), ClipboardContent::Files(vec![p])];
+    let mut v = vec![
+        ClipboardContent::Text(p.clone()),
+        ClipboardContent::Files(vec![p]),
+    ];
     v.extend(image_only(png.unwrap_or_default()));
     v
 }
@@ -132,7 +143,10 @@ fn text_only(path: &Path) -> Vec<ClipboardContent> {
 #[cfg(not(target_os = "linux"))]
 fn image_only(png: &[u8]) -> Vec<ClipboardContent> {
     use clipboard_rs::{common::RustImage, RustImageData};
-    RustImageData::from_bytes(png).map(ClipboardContent::Image).into_iter().collect()
+    RustImageData::from_bytes(png)
+        .map(ClipboardContent::Image)
+        .into_iter()
+        .collect()
 }
 
 #[cfg(all(test, target_os = "linux"))]
@@ -141,7 +155,10 @@ mod tests {
 
     #[test]
     fn file_uri_percent_encodes() {
-        assert_eq!(file_uri(Path::new("/home/k/Vidéos/a b.png")), "file:///home/k/Vid%C3%A9os/a%20b.png");
+        assert_eq!(
+            file_uri(Path::new("/home/k/Vidéos/a b.png")),
+            "file:///home/k/Vid%C3%A9os/a%20b.png"
+        );
         assert_eq!(
             file_uri(Path::new("/tmp/Screenshot_2026-09-22_20-41-07.png")),
             "file:///tmp/Screenshot_2026-09-22_20-41-07.png"
@@ -152,14 +169,24 @@ mod tests {
     fn formats_carry_path_uri_and_optional_png() {
         let p = Path::new("/tmp/s.png");
         let f = linux_formats(p, Some(b"PNG"));
-        let get = |k: &str| f.iter().find(|(n, _)| *n == k).map(|(_, b)| b.clone()).unwrap();
+        let get = |k: &str| {
+            f.iter()
+                .find(|(n, _)| *n == k)
+                .map(|(_, b)| b.clone())
+                .unwrap()
+        };
         assert_eq!(get("UTF8_STRING"), b"/tmp/s.png");
         assert_eq!(get("text/plain;charset=utf-8"), b"/tmp/s.png");
         assert_eq!(get("text/plain"), b"/tmp/s.png");
         assert_eq!(get("text/uri-list"), b"file:///tmp/s.png\r\n");
-        assert_eq!(get("x-special/gnome-copied-files"), b"copy\nfile:///tmp/s.png");
+        assert_eq!(
+            get("x-special/gnome-copied-files"),
+            b"copy\nfile:///tmp/s.png"
+        );
         assert_eq!(get("image/png"), b"PNG");
-        assert!(linux_formats(p, None).iter().all(|(n, _)| *n != "image/png"));
+        assert!(linux_formats(p, None)
+            .iter()
+            .all(|(n, _)| *n != "image/png"));
     }
 
     #[test]
@@ -186,6 +213,9 @@ mod tests {
                 _ => "unexpected".to_string(),
             })
             .collect();
-        assert_eq!(formats, ["UTF8_STRING", "text/plain;charset=utf-8", "text/plain"]);
+        assert_eq!(
+            formats,
+            ["UTF8_STRING", "text/plain;charset=utf-8", "text/plain"]
+        );
     }
 }

@@ -54,7 +54,9 @@ fn take_over_or_roll_back(c: &mut store::Config) -> Result<(), String> {
             // A kept backup means GNOME's keys may still be cleared: stay "on" so turning it off retries.
             Err(r) => {
                 c.takeover = c.gnome_backup.is_some();
-                Err(format!("{e}; putting GNOME's shortcuts back also failed: {r}"))
+                Err(format!(
+                    "{e}; putting GNOME's shortcuts back also failed: {r}"
+                ))
             }
         },
     }
@@ -72,7 +74,11 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
     let autostart = app.autolaunch();
     let was = autostart.is_enabled().unwrap_or(false);
     if settings.launch_at_login != was {
-        let r = if settings.launch_at_login { autostart.enable() } else { autostart.disable() };
+        let r = if settings.launch_at_login {
+            autostart.enable()
+        } else {
+            autostart.disable()
+        };
         if let Err(e) = r {
             error = Some(format!("Launch at login: {e}"));
         }
@@ -100,7 +106,11 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
 }
 
 #[tauri::command]
-pub fn onboarding_choice(app: AppHandle, state: State<'_, AppState>, accept: bool) -> Result<(), String> {
+pub fn onboarding_choice(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    accept: bool,
+) -> Result<(), String> {
     let mut c = state.config.lock().unwrap();
     c.onboarded = true;
     let result = if accept {
@@ -116,7 +126,9 @@ pub fn onboarding_choice(app: AppHandle, state: State<'_, AppState>, accept: boo
 #[tauri::command]
 pub fn open_config(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     store::save_config(&state.config.lock().unwrap()).map_err(err)?;
-    app.opener().open_path(store::config_path().to_string_lossy(), None::<&str>).map_err(err)
+    app.opener()
+        .open_path(store::config_path().to_string_lossy(), None::<&str>)
+        .map_err(err)
 }
 
 #[tauri::command]

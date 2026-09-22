@@ -26,7 +26,11 @@ pub struct Shortcuts {
 
 impl Default for Shortcuts {
     fn default() -> Self {
-        Self { area: "Print".into(), screen: "Shift+Print".into(), window: "Alt+Print".into() }
+        Self {
+            area: "Print".into(),
+            screen: "Shift+Print".into(),
+            window: "Alt+Print".into(),
+        }
     }
 }
 
@@ -80,7 +84,10 @@ impl Default for Config {
 }
 
 pub fn config_path() -> PathBuf {
-    dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("rshot").join("config.toml")
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("rshot")
+        .join("config.toml")
 }
 
 pub fn load_config() -> Config {
@@ -99,7 +106,11 @@ pub fn load_config_from(p: &Path) -> Config {
         Err(e) => e.to_string(),
     };
     let aside = p.with_extension("toml.invalid");
-    eprintln!("rshot: moving unusable {} to {}: {err}", p.display(), aside.display());
+    eprintln!(
+        "rshot: moving unusable {} to {}: {err}",
+        p.display(),
+        aside.display()
+    );
     let _ = fs::rename(p, aside);
     Config::default()
 }
@@ -146,14 +157,22 @@ pub fn unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
 pub fn new_screenshot_path(c: &Config) -> io::Result<PathBuf> {
     let dir = screenshots_dir(c);
     fs::create_dir_all(&dir)?;
-    Ok(unique_path(&dir, &capture_stem("Screenshot", Local::now().naive_local()), "png"))
+    Ok(unique_path(
+        &dir,
+        &capture_stem("Screenshot", Local::now().naive_local()),
+        "png",
+    ))
 }
 
 /// Writes to a temp file in the same folder, then renames, so readers never see half a file.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let dir = path.parent().ok_or_else(|| io::Error::other("path has no parent"))?;
+    let dir = path
+        .parent()
+        .ok_or_else(|| io::Error::other("path has no parent"))?;
     fs::create_dir_all(dir)?;
-    let name = path.file_name().ok_or_else(|| io::Error::other("path has no file name"))?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| io::Error::other("path has no file name"))?;
     let tmp = dir.join(format!(".{}.tmp", name.to_string_lossy()));
     fs::write(&tmp, bytes)?;
     fs::rename(&tmp, path).inspect_err(|_| {
@@ -175,8 +194,14 @@ mod tests {
 
     #[test]
     fn stem_has_no_spaces() {
-        let t = NaiveDate::from_ymd_opt(2026, 9, 22).unwrap().and_hms_opt(20, 41, 7).unwrap();
-        assert_eq!(capture_stem("Screenshot", t), "Screenshot_2026-09-22_20-41-07");
+        let t = NaiveDate::from_ymd_opt(2026, 9, 22)
+            .unwrap()
+            .and_hms_opt(20, 41, 7)
+            .unwrap();
+        assert_eq!(
+            capture_stem("Screenshot", t),
+            "Screenshot_2026-09-22_20-41-07"
+        );
     }
 
     #[test]
@@ -208,7 +233,13 @@ mod tests {
         assert!(!c.show_thumbnail);
         assert!(c.shutter_sound);
         let mut c2 = c.clone();
-        c2.last_selection = Some(Selection { monitor: "DP-4".into(), x: 1, y: 2, w: 3, h: 4 });
+        c2.last_selection = Some(Selection {
+            monitor: "DP-4".into(),
+            x: 1,
+            y: 2,
+            w: 3,
+            h: 4,
+        });
         c2.gnome_backup = Some([("screenshot".to_string(), "['<Shift>Print']".to_string())].into());
         c2.clipboard_mode = ClipboardMode::PathOnly;
         save_config_to(&p, &c2).unwrap();
@@ -233,6 +264,9 @@ mod tests {
     fn dir_setting_maps_the_default_folder_to_none() {
         let default = screenshots_dir(&Config::default());
         assert_eq!(dir_setting(&default.display().to_string()), None);
-        assert_eq!(dir_setting("/data/shots"), Some(PathBuf::from("/data/shots")));
+        assert_eq!(
+            dir_setting("/data/shots"),
+            Some(PathBuf::from("/data/shots"))
+        );
     }
 }

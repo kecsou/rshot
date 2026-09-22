@@ -79,18 +79,21 @@ fn main() {
 
     let app = tauri::Builder::default()
         // Must stay the first plugin: a second `rshot …` forwards its argv here and exits.
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            match cli::parse(argv.get(1..).unwrap_or_default()) {
+        .plugin(tauri_plugin_single_instance::init(
+            |app, argv, _cwd| match cli::parse(argv.get(1..).unwrap_or_default()) {
                 Ok(cmd) => dispatch(app, cmd),
                 Err(e) => eprintln!("rshot: {e}"),
-            }
-        }))
+            },
+        ))
         .manage(AppState::new())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_drag::init())
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             overlay::overlay_info,
             overlay::overlay_frame,
@@ -150,10 +153,19 @@ const SINGLE_INSTANCE_NAME: &str = "io.github.kecsou.rshot.SingleInstance";
 fn forward_to_daemon() -> bool {
     let path = format!("/{}", SINGLE_INSTANCE_NAME.replace('.', "/"));
     let argv: Vec<String> = std::env::args().collect();
-    let cwd = std::env::current_dir().unwrap_or_default().display().to_string();
+    let cwd = std::env::current_dir()
+        .unwrap_or_default()
+        .display()
+        .to_string();
     zbus::blocking::Connection::session()
         .and_then(|c| {
-            c.call_method(Some(SINGLE_INSTANCE_NAME), path.as_str(), Some("org.SingleInstance.DBus"), "ExecuteCallback", &(argv, cwd))
+            c.call_method(
+                Some(SINGLE_INSTANCE_NAME),
+                path.as_str(),
+                Some("org.SingleInstance.DBus"),
+                "ExecuteCallback",
+                &(argv, cwd),
+            )
         })
         .is_ok()
 }
@@ -176,7 +188,11 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
 mod tests {
     #[test]
     fn single_instance_name_follows_the_bundle_identifier() {
-        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
-        assert_eq!(format!("{}.SingleInstance", conf["identifier"].as_str().unwrap()), super::SINGLE_INSTANCE_NAME);
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(
+            format!("{}.SingleInstance", conf["identifier"].as_str().unwrap()),
+            super::SINGLE_INSTANCE_NAME
+        );
     }
 }

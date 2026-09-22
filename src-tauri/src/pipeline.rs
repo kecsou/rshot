@@ -16,7 +16,8 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
     let state = app.state::<AppState>();
     let cfg = state.config.lock().unwrap().clone();
     let png = capture::encode_png(&img)?;
-    let saved = store::new_screenshot_path(&cfg).and_then(|p| store::write_atomic(&p, &png).map(|()| p));
+    let saved =
+        store::new_screenshot_path(&cfg).and_then(|p| store::write_atomic(&p, &png).map(|()| p));
     let path = match saved {
         Ok(p) => p,
         Err(e) => {
@@ -29,7 +30,9 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
             ));
         }
     };
-    let copied = state.clipboard.copy_capture(&path, Some(&png), cfg.clipboard_mode);
+    let copied = state
+        .clipboard
+        .copy_capture(&path, Some(&png), cfg.clipboard_mode);
     if let Err(e) = &copied {
         eprintln!("rshot: clipboard: {e}");
     }
@@ -73,10 +76,17 @@ pub fn capture_window_now(app: &AppHandle) -> Result<(), String> {
 #[cfg(target_os = "linux")]
 fn play_shutter(app: &AppHandle) {
     use tauri::path::BaseDirectory;
-    if let Ok(wav) = app.path().resolve("sounds/shutter.wav", BaseDirectory::Resource) {
+    if let Ok(wav) = app
+        .path()
+        .resolve("sounds/shutter.wav", BaseDirectory::Resource)
+    {
         // A thread waits on the player so no zombie process is left behind.
         std::thread::spawn(move || {
-            if std::process::Command::new("pw-play").arg(&wav).status().is_err() {
+            if std::process::Command::new("pw-play")
+                .arg(&wav)
+                .status()
+                .is_err()
+            {
                 let _ = std::process::Command::new("paplay").arg(&wav).status();
             }
         });

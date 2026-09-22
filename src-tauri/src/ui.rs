@@ -8,7 +8,10 @@ use tauri::{
 
 use crate::{capture::Frame, cli::Cmd, err};
 use std::time::Duration;
-use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{
+    Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder,
+};
 
 #[cfg(target_os = "linux")]
 use gtk::prelude::*;
@@ -31,7 +34,11 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         ],
     )?;
     TrayIconBuilder::new()
-        .icon(app.default_window_icon().cloned().expect("bundle icon is configured"))
+        .icon(
+            app.default_window_icon()
+                .cloned()
+                .expect("bundle icon is configured"),
+        )
         .tooltip("rshot")
         .menu(&menu)
         .on_menu_event(|app, e| {
@@ -66,19 +73,35 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 
 fn open_last(app: &AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    let last = app.state::<crate::AppState>().last_capture.lock().unwrap().clone();
+    let last = app
+        .state::<crate::AppState>()
+        .last_capture
+        .lock()
+        .unwrap()
+        .clone();
     let path = last.ok_or("No capture yet")?;
-    app.opener().open_path(path.to_string_lossy(), None::<&str>).map_err(err)
+    app.opener()
+        .open_path(path.to_string_lossy(), None::<&str>)
+        .map_err(err)
 }
 
 fn open_folder(app: &AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let dir = crate::store::screenshots_dir(&app.state::<crate::AppState>().config.lock().unwrap());
     std::fs::create_dir_all(&dir).map_err(err)?;
-    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(err)
+    app.opener()
+        .open_path(dir.to_string_lossy(), None::<&str>)
+        .map_err(err)
 }
 
-fn dialog_window(app: &AppHandle, label: &str, page: &str, title: &str, w: f64, h: f64) -> Result<(), String> {
+fn dialog_window(
+    app: &AppHandle,
+    label: &str,
+    page: &str,
+    title: &str,
+    w: f64,
+    h: f64,
+) -> Result<(), String> {
     if let Some(win) = app.get_webview_window(label) {
         win.show().map_err(err)?;
         // A plain set_focus loses to Mutter's focus-stealing prevention (window stays buried).
@@ -101,11 +124,25 @@ fn dialog_window(app: &AppHandle, label: &str, page: &str, title: &str, w: f64, 
 }
 
 pub fn open_settings(app: &AppHandle) -> Result<(), String> {
-    dialog_window(app, "settings", "settings/index.html", "rshot Settings", 720.0, 680.0)
+    dialog_window(
+        app,
+        "settings",
+        "settings/index.html",
+        "rshot Settings",
+        720.0,
+        680.0,
+    )
 }
 
 pub fn open_onboarding(app: &AppHandle) -> Result<(), String> {
-    dialog_window(app, "onboarding", "onboarding/index.html", "Welcome to rshot", 480.0, 400.0)
+    dialog_window(
+        app,
+        "onboarding",
+        "onboarding/index.html",
+        "Welcome to rshot",
+        480.0,
+        400.0,
+    )
 }
 
 pub fn overlay_index(label: &str) -> Option<usize> {
@@ -145,7 +182,8 @@ pub fn place_overlays(app: &AppHandle, frames: &[Frame]) -> Result<(), String> {
         if w.outer_position().ok() != Some(pos) || !w.is_fullscreen().unwrap_or(false) {
             w.set_fullscreen(false).map_err(err)?;
             w.set_position(pos).map_err(err)?;
-            w.set_size(PhysicalSize::new(f.image.width(), f.image.height())).map_err(err)?;
+            w.set_size(PhysicalSize::new(f.image.width(), f.image.height()))
+                .map_err(err)?;
             w.set_fullscreen(true).map_err(err)?;
         }
     }
@@ -224,7 +262,14 @@ pub fn close_prefix(app: &AppHandle, prefix: &str) {
 }
 
 /// A small undecorated, transparent, always-on-top window (thumbnail, countdown).
-pub fn popup(app: &AppHandle, prefix: &str, page: &str, w: f64, h: f64, focused: bool) -> Result<WebviewWindow, String> {
+pub fn popup(
+    app: &AppHandle,
+    prefix: &str,
+    page: &str,
+    w: f64,
+    h: f64,
+    focused: bool,
+) -> Result<WebviewWindow, String> {
     close_prefix(app, prefix);
     let n = POPUP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     WebviewWindowBuilder::new(app, format!("{prefix}-{n}"), WebviewUrl::App(page.into()))
@@ -253,7 +298,11 @@ pub fn show_countdown(app: &AppHandle, (cx, cy): (i32, i32)) -> Result<(), Strin
     let s = monitor_at(app, cx.into(), cy.into())?.scale_factor();
     let (w, h) = (160.0, 180.0);
     let win = popup(app, "countdown", "countdown/index.html", w, h, true)?;
-    win.set_position(PhysicalPosition::new(cx - (w * s / 2.0) as i32, cy - (h * s / 2.0) as i32)).map_err(err)?;
+    win.set_position(PhysicalPosition::new(
+        cx - (w * s / 2.0) as i32,
+        cy - (h * s / 2.0) as i32,
+    ))
+    .map_err(err)?;
     win.show().map_err(err)?;
     win.set_focus().map_err(err)
 }

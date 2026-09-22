@@ -11,7 +11,11 @@ use crate::store::{self, Config};
 fn exe_command() -> String {
     std::env::var("APPIMAGE")
         .ok()
-        .or_else(|| std::env::current_exe().ok().map(|p| p.display().to_string()))
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .map(|p| p.display().to_string())
+        })
         .unwrap_or_else(|| "rshot".into())
 }
 
@@ -63,8 +67,14 @@ pub fn manual_commands(c: &Config) -> Vec<(String, String)> {
     let exe = exe_command();
     vec![
         (c.shortcuts.area.clone(), command_for(&exe, "capture area")),
-        (c.shortcuts.screen.clone(), command_for(&exe, "capture screen")),
-        (c.shortcuts.window.clone(), command_for(&exe, "capture window")),
+        (
+            c.shortcuts.screen.clone(),
+            command_for(&exe, "capture screen"),
+        ),
+        (
+            c.shortcuts.window.clone(),
+            command_for(&exe, "capture window"),
+        ),
     ]
 }
 
@@ -72,7 +82,10 @@ pub fn manual_commands(c: &Config) -> Vec<(String, String)> {
 mod tests {
     #[test]
     fn commands_survive_exec_parsing() {
-        assert_eq!(super::command_for("/usr/bin/rshot", "capture area"), r#""/usr/bin/rshot" capture area"#);
+        assert_eq!(
+            super::command_for("/usr/bin/rshot", "capture area"),
+            r#""/usr/bin/rshot" capture area"#
+        );
         assert_eq!(
             super::command_for(r#"/my apps/$x"`\100%/rshot"#, "capture screen"),
             r#""/my apps/\$x\"\`\\100%%/rshot" capture screen"#

@@ -29,7 +29,10 @@ pub fn format_strv(v: &[String]) -> String {
     if v.is_empty() {
         "@as []".into()
     } else {
-        format!("[{}]", v.iter().map(|s| quote(s)).collect::<Vec<_>>().join(", "))
+        format!(
+            "[{}]",
+            v.iter().map(|s| quote(s)).collect::<Vec<_>>().join(", ")
+        )
     }
 }
 
@@ -62,7 +65,11 @@ pub fn with_paths(existing: &[String], ours: &[String]) -> Vec<String> {
 }
 
 pub fn without_paths(existing: &[String], ours: &[String]) -> Vec<String> {
-    existing.iter().filter(|p| !ours.contains(p)).cloned().collect()
+    existing
+        .iter()
+        .filter(|p| !ours.contains(p))
+        .cloned()
+        .collect()
 }
 
 #[cfg(test)]
@@ -83,7 +90,10 @@ mod tests {
     fn parses_gsettings_output() {
         assert_eq!(parse_strv("['Print']"), v(&["Print"]));
         assert_eq!(parse_strv("@as []"), Vec::<String>::new());
-        assert_eq!(parse_strv("['<Shift>Print', 'a\\'b']"), v(&["<Shift>Print", "a'b"]));
+        assert_eq!(
+            parse_strv("['<Shift>Print', 'a\\'b']"),
+            v(&["<Shift>Print", "a'b"])
+        );
         assert_eq!(parse_strv("[\"x\"]"), v(&["x"]));
     }
 
@@ -98,7 +108,10 @@ mod tests {
     fn converts_accelerators() {
         assert_eq!(to_gnome_accel("Print").unwrap(), "Print");
         assert_eq!(to_gnome_accel("Shift+Print").unwrap(), "<Shift>Print");
-        assert_eq!(to_gnome_accel("Ctrl+Alt+Shift+R").unwrap(), "<Ctrl><Alt><Shift>R");
+        assert_eq!(
+            to_gnome_accel("Ctrl+Alt+Shift+R").unwrap(),
+            "<Ctrl><Alt><Shift>R"
+        );
         assert_eq!(to_gnome_accel("Super+4").unwrap(), "<Super>4");
     }
 
@@ -112,7 +125,13 @@ mod tests {
     #[test]
     fn merges_and_removes_custom_paths() {
         let ours = v(&["/r/a/", "/r/b/"]);
-        assert_eq!(with_paths(&v(&["/x/", "/r/a/"]), &ours), v(&["/x/", "/r/a/", "/r/b/"]));
-        assert_eq!(without_paths(&v(&["/x/", "/r/a/", "/r/b/"]), &ours), v(&["/x/"]));
+        assert_eq!(
+            with_paths(&v(&["/x/", "/r/a/"]), &ours),
+            v(&["/x/", "/r/a/", "/r/b/"])
+        );
+        assert_eq!(
+            without_paths(&v(&["/x/", "/r/a/", "/r/b/"]), &ours),
+            v(&["/x/"])
+        );
     }
 }

@@ -25,8 +25,8 @@ pub struct WinRect {
 
 use crate::err;
 
-/// Grabs every monitor, each on its own thread (xcap opens a connection per call, so the grabs and
-/// pixel conversions overlap). Frames keep `Monitor::all()` order.
+/// Grabs every monitor, on Linux each on its own thread (xcap opens a connection per call, so the
+/// grabs and pixel conversions overlap). Frames keep `Monitor::all()` order.
 pub fn grab_all(show_pointer: bool) -> Result<Vec<Frame>, String> {
     let cursor = if show_pointer { cursor::grab() } else { None };
     let monitors = xcap::Monitor::all().map_err(err)?;
@@ -36,12 +36,27 @@ pub fn grab_all(show_pointer: bool) -> Result<Vec<Frame>, String> {
         if let Some(c) = &cursor {
             cursor::composite(&mut image, c, x, y);
         }
-        Ok(Frame { name: m.name().unwrap_or_default(), x, y, image })
+        Ok(Frame {
+            name: m.name().unwrap_or_default(),
+            x,
+            y,
+            image,
+        })
     };
-    std::thread::scope(|s| {
-        let jobs: Vec<_> = monitors.iter().map(|m| s.spawn(move || grab(m))).collect();
-        jobs.into_iter().map(|j| j.join().map_err(|_| "monitor grab panicked".to_string())?).collect()
-    })
+    #[cfg(target_os = "linux")]
+    {
+        std::thread::scope(|s| {
+            let jobs: Vec<_> = monitors.iter().map(|m| s.spawn(move || grab(m))).collect();
+            jobs.into_iter()
+                .map(|j| j.join().map_err(|_| "monitor grab panicked".to_string())?)
+                .collect()
+        })
+    }
+    // ponytail: xcap's Windows monitor handle isn't Send, so other OSes grab one after another.
+    #[cfg(not(target_os = "linux"))]
+    {
+        monitors.iter().map(grab).collect()
+    }
 }
 
 /// Index of the frame containing the desktop point, or 0.
@@ -49,7 +64,10 @@ pub fn frame_at(frames: &[Frame], px: i32, py: i32) -> usize {
     frames
         .iter()
         .position(|f| {
-            px >= f.x && py >= f.y && px < f.x + f.image.width() as i32 && py < f.y + f.image.height() as i32
+            px >= f.x
+                && py >= f.y
+                && px < f.x + f.image.width() as i32
+                && py < f.y + f.image.height() as i32
         })
         .unwrap_or(0)
 }
@@ -71,7 +89,12 @@ pub fn crop(img: &RgbaImage, r: [u32; 4]) -> RgbaImage {
 pub fn encode_png(img: &RgbaImage) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     PngEncoder::new(&mut out)
-        .write_image(img.as_raw(), img.width(), img.height(), ExtendedColorType::Rgba8)
+        .write_image(
+            img.as_raw(),
+            img.width(),
+            img.height(),
+            ExtendedColorType::Rgba8,
+        )
         .map_err(err)?;
     Ok(out)
 }
@@ -96,7 +119,12 @@ pub fn windows_on(f: &Frame) -> Vec<WinRect> {
                 w: w.width().ok()?,
                 h: w.height().ok()?,
             };
-            let hits = r.w > 0 && r.h > 0 && r.x < fw && r.y < fh && r.x + r.w as i32 > 0 && r.y + r.h as i32 > 0;
+            let hits = r.w > 0
+                && r.h > 0
+                && r.x < fw
+                && r.y < fh
+                && r.x + r.w as i32 > 0
+                && r.y + r.h as i32 > 0;
             hits.then_some(r)
         })
         .collect()
@@ -141,10 +169,20 @@ mod cursor {
         for (px, argb) in img.pixels_mut().zip(r.cursor_image.iter()) {
             let [b, g, red, a] = argb.to_le_bytes();
             // XFixes gives premultiplied ARGB; image::overlay expects straight alpha.
-            let un = |c: u8| if a == 0 { 0 } else { ((c as u32 * 255) / a as u32).min(255) as u8 };
+            let un = |c: u8| {
+                if a == 0 {
+                    0
+                } else {
+                    ((c as u32 * 255) / a as u32).min(255) as u8
+                }
+            };
             *px = Rgba([un(red), un(g), un(b), a]);
         }
-        Some(Cursor { x: i32::from(r.x) - i32::from(r.xhot), y: i32::from(r.y) - i32::from(r.yhot), img })
+        Some(Cursor {
+            x: i32::from(r.x) - i32::from(r.xhot),
+            y: i32::from(r.y) - i32::from(r.yhot),
+            img,
+        })
     }
 
     pub fn composite(frame: &mut RgbaImage, c: &Cursor, fx: i32, fy: i32) {
@@ -167,14 +205,28 @@ mod tests {
     use super::*;
 
     fn frame(x: i32, y: i32, w: u32, h: u32) -> Frame {
-        Frame { name: String::new(), x, y, image: RgbaImage::new(w, h) }
+        Frame {
+            name: String::new(),
+            x,
+            y,
+            image: RgbaImage::new(w, h),
+        }
     }
 
     #[test]
     fn clamp_rect_rounds_and_clips() {
-        assert_eq!(clamp_rect(10.4, 20.6, 100.0, 50.0, 1920, 1080), Some([10, 21, 100, 50]));
-        assert_eq!(clamp_rect(-5.0, -5.0, 20.0, 20.0, 100, 100), Some([0, 0, 15, 15]));
-        assert_eq!(clamp_rect(90.0, 90.0, 50.0, 50.0, 100, 100), Some([90, 90, 10, 10]));
+        assert_eq!(
+            clamp_rect(10.4, 20.6, 100.0, 50.0, 1920, 1080),
+            Some([10, 21, 100, 50])
+        );
+        assert_eq!(
+            clamp_rect(-5.0, -5.0, 20.0, 20.0, 100, 100),
+            Some([0, 0, 15, 15])
+        );
+        assert_eq!(
+            clamp_rect(90.0, 90.0, 50.0, 50.0, 100, 100),
+            Some([90, 90, 10, 10])
+        );
         assert_eq!(clamp_rect(10.0, 10.0, 0.2, 30.0, 100, 100), None);
         assert_eq!(clamp_rect(200.0, 10.0, 10.0, 10.0, 100, 100), None);
     }
@@ -182,7 +234,11 @@ mod tests {
     #[test]
     fn frame_at_finds_the_monitor_under_a_point() {
         // The author's layout: DP-1 left, DP-4 middle (primary), HDMI-0 right.
-        let fs = [frame(0, 224, 1920, 1080), frame(1920, 0, 2560, 1600), frame(4480, 252, 1920, 1080)];
+        let fs = [
+            frame(0, 224, 1920, 1080),
+            frame(1920, 0, 2560, 1600),
+            frame(4480, 252, 1920, 1080),
+        ];
         assert_eq!(frame_at(&fs, 100, 500), 0);
         assert_eq!(frame_at(&fs, 3000, 10), 1);
         assert_eq!(frame_at(&fs, 5000, 1000), 2);
@@ -194,6 +250,12 @@ mod tests {
         let img = RgbaImage::from_pixel(50, 40, image::Rgba([255, 0, 0, 255]));
         let png = encode_png(&crop(&img, [5, 5, 20, 10])).unwrap();
         assert_eq!(&png[1..4], b"PNG");
-        assert_eq!(image::load_from_memory(&png).unwrap().to_rgba8().dimensions(), (20, 10));
+        assert_eq!(
+            image::load_from_memory(&png)
+                .unwrap()
+                .to_rgba8()
+                .dimensions(),
+            (20, 10)
+        );
     }
 }

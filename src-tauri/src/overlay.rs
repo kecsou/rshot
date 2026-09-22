@@ -75,7 +75,10 @@ pub struct OverlayInfo {
 const HINT_SESSIONS: u32 = 5;
 
 fn epoch_ms() -> u128 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
 }
 
 /// Grabs every monitor and asks each overlay page to show its frame.
@@ -85,12 +88,22 @@ pub fn start(app: &AppHandle, mode: &str) -> Result<(), String> {
     let state = app.state::<AppState>();
     let show_pointer = state.config.lock().unwrap().show_pointer;
     let frames = capture::grab_all(show_pointer)?;
-    eprintln!("rshot: grabbed {} monitor(s) in {} ms", frames.len(), started.elapsed().as_millis());
+    eprintln!(
+        "rshot: grabbed {} monitor(s) in {} ms",
+        frames.len(),
+        started.elapsed().as_millis()
+    );
     let pos = app.cursor_position().map_err(err)?;
     let active = capture::frame_at(&frames, pos.x as i32, pos.y as i32);
     ui::place_overlays(app, &frames)?;
     let token = state.next_token.fetch_add(1, Ordering::Relaxed);
-    *state.session.lock().unwrap() = Some(Session { token, mode: mode.into(), frames, active, started });
+    *state.session.lock().unwrap() = Some(Session {
+        token,
+        mode: mode.into(),
+        frames,
+        active,
+        started,
+    });
     {
         let mut c = state.config.lock().unwrap();
         if c.hints_shown <= HINT_SESSIONS {
@@ -112,7 +125,12 @@ pub fn overlay_info(window: WebviewWindow, state: State<'_, AppState>) -> Option
         .last_selection
         .as_ref()
         .filter(|l| c.remember_selection && l.monitor == f.name)
-        .map(|l| Rect { x: l.x.into(), y: l.y.into(), w: l.w.into(), h: l.h.into() });
+        .map(|l| Rect {
+            x: l.x.into(),
+            y: l.y.into(),
+            w: l.w.into(),
+            h: l.h.into(),
+        });
     Some(OverlayInfo {
         token: s.token,
         mode: s.mode.clone(),
@@ -133,7 +151,10 @@ pub async fn overlay_frame(app: AppHandle, window: WebviewWindow) -> Result<Resp
     let index = ui::overlay_index(window.label()).ok_or("not an overlay")?;
     let state = app.state::<AppState>();
     let session = state.session.lock().unwrap();
-    let f = session.as_ref().and_then(|s| s.frames.get(index)).ok_or("no frame")?;
+    let f = session
+        .as_ref()
+        .and_then(|s| s.frames.get(index))
+        .ok_or("no frame")?;
     Ok(Response::new(f.image.as_raw().clone()))
 }
 
@@ -141,7 +162,11 @@ pub async fn overlay_frame(app: AppHandle, window: WebviewWindow) -> Result<Resp
 /// Mutter focuses each overlay as it maps, and tao ignores set_focus until GTK has shown the
 /// window, so only the overlay under the pointer may take focus (overlay_activate moves it).
 #[tauri::command]
-pub fn overlay_ready(window: WebviewWindow, state: State<'_, AppState>, token: u64) -> Result<(), String> {
+pub fn overlay_ready(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    token: u64,
+) -> Result<(), String> {
     let session = state.session.lock().unwrap();
     let Some(s) = session.as_ref().filter(|s| s.token == token) else {
         return Ok(());
@@ -153,7 +178,11 @@ pub fn overlay_ready(window: WebviewWindow, state: State<'_, AppState>, token: u
         window.set_focus().map_err(err)?;
         #[cfg(target_os = "linux")]
         ui::force_focus(&window);
-        eprintln!("rshot: overlay visible at {} ({} ms after trigger)", epoch_ms(), s.started.elapsed().as_millis());
+        eprintln!(
+            "rshot: overlay visible at {} ({} ms after trigger)",
+            epoch_ms(),
+            s.started.elapsed().as_millis()
+        );
         // The other overlays wait for this before fetching their frames, so they don't slow it down.
         window.emit("overlay:primary-ready", token).map_err(err)?;
     }
@@ -161,9 +190,20 @@ pub fn overlay_ready(window: WebviewWindow, state: State<'_, AppState>, token: u
 }
 
 #[tauri::command]
-pub fn overlay_activate(app: AppHandle, window: WebviewWindow, state: State<'_, AppState>, token: u64) -> Result<(), String> {
+pub fn overlay_activate(
+    app: AppHandle,
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    token: u64,
+) -> Result<(), String> {
     let index = ui::overlay_index(window.label()).ok_or("not an overlay")?;
-    if let Some(s) = state.session.lock().unwrap().as_mut().filter(|s| s.token == token) {
+    if let Some(s) = state
+        .session
+        .lock()
+        .unwrap()
+        .as_mut()
+        .filter(|s| s.token == token)
+    {
         s.active = index;
     }
     let _ = window.set_focusable(true);
@@ -181,7 +221,12 @@ pub async fn overlay_cancel(app: AppHandle) {
 }
 
 #[tauri::command]
-pub async fn overlay_capture(app: AppHandle, window: WebviewWindow, token: u64, target: Target) -> Result<(), String> {
+pub async fn overlay_capture(
+    app: AppHandle,
+    window: WebviewWindow,
+    token: u64,
+    target: Target,
+) -> Result<(), String> {
     let index = ui::overlay_index(window.label()).ok_or("not an overlay")?;
     let session = {
         let state = app.state::<AppState>();
@@ -202,8 +247,17 @@ pub async fn overlay_capture(app: AppHandle, window: WebviewWindow, token: u64, 
     result
 }
 
-fn capture_from(app: &AppHandle, session: Session, index: usize, target: Target) -> Result<(), String> {
-    let frame = session.frames.into_iter().nth(index).ok_or("that monitor is gone")?;
+fn capture_from(
+    app: &AppHandle,
+    session: Session,
+    index: usize,
+    target: Target,
+) -> Result<(), String> {
+    let frame = session
+        .frames
+        .into_iter()
+        .nth(index)
+        .ok_or("that monitor is gone")?;
     if let Target::Area { rect } = target {
         remember(app, &frame.name, rect);
     }
@@ -211,16 +265,23 @@ fn capture_from(app: &AppHandle, session: Session, index: usize, target: Target)
     if secs > 0 {
         let (fw, fh) = frame.image.dimensions();
         let center = match target {
-            Target::Area { rect } | Target::Window { rect, .. } => {
-                (frame.x + (rect.x + rect.w / 2.0) as i32, frame.y + (rect.y + rect.h / 2.0) as i32)
-            }
+            Target::Area { rect } | Target::Window { rect, .. } => (
+                frame.x + (rect.x + rect.w / 2.0) as i32,
+                frame.y + (rect.y + rect.h / 2.0) as i32,
+            ),
             Target::Screen => (frame.x + (fw / 2) as i32, frame.y + (fh / 2) as i32),
         };
-        *app.state::<AppState>().pending.lock().unwrap() = Some(Pending { monitor: frame.name, target, secs });
+        *app.state::<AppState>().pending.lock().unwrap() = Some(Pending {
+            monitor: frame.name,
+            target,
+            secs,
+        });
         return ui::show_countdown(app, center);
     }
     let (w, h) = frame.image.dimensions();
-    let clamp = |r: Rect| capture::clamp_rect(r.x, r.y, r.w, r.h, w, h).ok_or_else(|| "empty selection".to_string());
+    let clamp = |r: Rect| {
+        capture::clamp_rect(r.x, r.y, r.w, r.h, w, h).ok_or_else(|| "empty selection".to_string())
+    };
     let img = match target {
         Target::Screen => frame.image,
         Target::Area { rect } => capture::crop(&frame.image, clamp(rect)?),
@@ -241,7 +302,10 @@ pub struct Pending {
 }
 
 #[tauri::command]
-pub fn set_overlay_options(state: State<'_, AppState>, options: OverlayOptions) -> Result<(), String> {
+pub fn set_overlay_options(
+    state: State<'_, AppState>,
+    options: OverlayOptions,
+) -> Result<(), String> {
     let mut c = state.config.lock().unwrap();
     c.timer_secs = options.timer_secs;
     c.show_thumbnail = options.show_thumbnail;
@@ -301,8 +365,15 @@ fn run_pending(app: &AppHandle, p: Pending) -> Result<(), String> {
             match target {
                 Target::Area { rect } => capture::crop(
                     &f.image,
-                    capture::clamp_rect(rect.x, rect.y, rect.w, rect.h, f.image.width(), f.image.height())
-                        .ok_or("empty selection")?,
+                    capture::clamp_rect(
+                        rect.x,
+                        rect.y,
+                        rect.w,
+                        rect.h,
+                        f.image.width(),
+                        f.image.height(),
+                    )
+                    .ok_or("empty selection")?,
                 ),
                 _ => f.image,
             }
@@ -331,10 +402,19 @@ mod tests {
     #[test]
     fn targets_parse_from_the_ts_shapes() {
         let t = |s: &str| serde_json::from_str::<Target>(s).unwrap();
-        let r = Rect { x: 1.5, y: 2.0, w: 3.0, h: 4.0 };
+        let r = Rect {
+            x: 1.5,
+            y: 2.0,
+            w: 3.0,
+            h: 4.0,
+        };
         let rect = r#""rect":{"x":1.5,"y":2,"w":3,"h":4}"#;
-        assert!(matches!(t(&format!(r#"{{"kind":"area",{rect}}}"#)), Target::Area { rect } if rect == r));
-        assert!(matches!(t(&format!(r#"{{"kind":"window","id":7,{rect}}}"#)), Target::Window { id: 7, rect } if rect == r));
+        assert!(
+            matches!(t(&format!(r#"{{"kind":"area",{rect}}}"#)), Target::Area { rect } if rect == r)
+        );
+        assert!(
+            matches!(t(&format!(r#"{{"kind":"window","id":7,{rect}}}"#)), Target::Window { id: 7, rect } if rect == r)
+        );
         assert!(matches!(t(r#"{"kind":"screen"}"#), Target::Screen));
         assert_eq!(ui::overlay_index("overlay-2"), Some(2));
         assert_eq!(ui::overlay_index("settings"), None);
