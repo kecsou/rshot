@@ -87,14 +87,21 @@ pub fn load_config() -> Config {
     load_config_from(&config_path())
 }
 
+/// A config that can't be read or parsed is moved to `config.toml.invalid`, so the next
+/// save can't destroy what it held (e.g. the user's original GNOME keybindings).
 pub fn load_config_from(p: &Path) -> Config {
-    match fs::read_to_string(p) {
-        Ok(s) => toml::from_str(&s).unwrap_or_else(|e| {
-            eprintln!("rshot: ignoring invalid {}: {e}", p.display());
-            Config::default()
-        }),
-        Err(_) => Config::default(),
-    }
+    let err = match fs::read_to_string(p) {
+        Ok(s) => match toml::from_str(&s) {
+            Ok(c) => return c,
+            Err(e) => e.to_string(),
+        },
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Config::default(),
+        Err(e) => e.to_string(),
+    };
+    let aside = p.with_extension("toml.invalid");
+    eprintln!("rshot: moving unusable {} to {}: {err}", p.display(), aside.display());
+    let _ = fs::rename(p, aside);
+    Config::default()
 }
 
 pub fn save_config(c: &Config) -> io::Result<()> {
@@ -206,8 +213,20 @@ mod tests {
         c2.clipboard_mode = ClipboardMode::PathOnly;
         save_config_to(&p, &c2).unwrap();
         assert_eq!(load_config_from(&p), c2);
-        fs::write(&p, "this is = = not toml").unwrap();
-        assert_eq!(load_config_from(&p), Config::default());
+    }
+
+    #[test]
+    fn bad_config_is_moved_aside_not_lost() {
+        let d = tmp("badconfig");
+        let p = d.join("config.toml");
+        let aside = d.join("config.toml.invalid");
+        // Parse error, then a non-NotFound read error (invalid UTF-8).
+        for bytes in [&b"this is = = not toml"[..], &b"\xff\xfe"[..]] {
+            fs::write(&p, bytes).unwrap();
+            assert_eq!(load_config_from(&p), Config::default());
+            assert!(!p.exists());
+            assert_eq!(fs::read(&aside).unwrap(), bytes);
+        }
     }
 
     #[test]
