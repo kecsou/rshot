@@ -5,6 +5,7 @@
                                 # so GNOME's keybinding grabs see it exactly like a real press)
   xdo.py key Return 0.12        # same, holding the keys down for 0.12 s before releasing
   xdo.py move 960 764           # warp the pointer to root coordinates (x, y)
+  xdo.py down / xdo.py up       # press / release the left mouse button (drag = move, down, move, up)
   xdo.py active                 # name of the focused (_NET_ACTIVE_WINDOW) window
   xdo.py visible 'rshot overlay' # number of viewable windows whose name contains the text
 """
@@ -61,6 +62,15 @@ def move(x: int, y: int) -> None:
     x11.XCloseDisplay(d)
 
 
+def button(pressed: bool) -> None:
+    x11, d = open_display()
+    xtst = ctypes.cdll.LoadLibrary("libXtst.so.6")
+    xtst.XTestFakeButtonEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
+    xtst.XTestFakeButtonEvent(d, 1, pressed, 0)
+    x11.XFlush(d)
+    x11.XCloseDisplay(d)
+
+
 def active() -> str:
     out = subprocess.run(["xprop", "-root", "_NET_ACTIVE_WINDOW"], capture_output=True, text=True).stdout
     m = re.search(r"(0x[0-9a-f]+)", out)
@@ -88,6 +98,8 @@ if __name__ == "__main__":
         key(sys.argv[2], float(sys.argv[3]) if len(sys.argv) > 3 else 0)
     elif cmd == "move":
         move(int(sys.argv[2]), int(sys.argv[3]))
+    elif cmd in ("down", "up"):
+        button(cmd == "down")
     elif cmd == "active":
         print(active())
     elif cmd == "visible":
