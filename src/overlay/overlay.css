@@ -1,0 +1,47 @@
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+body { cursor: crosshair; }
+body[data-mode='window'], body[data-mode='screen'] { cursor: pointer; }
+
+#frame { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+#shade { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.28); pointer-events: none; }
+
+#sel { position: fixed; border: 1.5px solid rgba(255, 255, 255, 0.95); box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0.5); pointer-events: none; }
+#sel .h { position: absolute; width: 9px; height: 9px; margin: -5px 0 0 -5px; background: #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3); }
+#sel .h[data-h='nw'] { left: 0; top: 0; }
+#sel .h[data-h='n'] { left: 50%; top: 0; }
+#sel .h[data-h='ne'] { left: 100%; top: 0; }
+#sel .h[data-h='w'] { left: 0; top: 50%; }
+#sel .h[data-h='e'] { left: 100%; top: 50%; }
+#sel .h[data-h='sw'] { left: 0; top: 100%; }
+#sel .h[data-h='s'] { left: 50%; top: 100%; }
+#sel .h[data-h='se'] { left: 100%; top: 100%; }
+#dim { position: absolute; top: calc(100% + 8px); right: 0; font: 500 11px Inter; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+
+#winhl { position: fixed; border-radius: 8px; background: rgba(10, 132, 255, 0.1); box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0.5), inset 0 0 0 2.5px var(--accent); pointer-events: none; }
+#winlabel { position: fixed; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 16px; border-radius: 12px; font: 600 13px Inter; pointer-events: none; max-width: 60vw; }
+#winlabel b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#winlabel small { font: 500 11px Inter; color: var(--text-2); }
+
+#loupe { position: fixed; width: 114px; height: 114px; border-radius: 50%; overflow: hidden; border: 2px solid #fff; box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55); pointer-events: none; background: #000; }
+#loupe canvas { display: block; }
+#loupe::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 10px), repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.12) 0 1px, transparent 1px 10px); }
+#loupe::after { content: ''; position: absolute; left: 50px; top: 50px; width: 10px; height: 10px; box-shadow: 0 0 0 1.5px var(--accent); }
+#coord { position: fixed; font: 500 10.5px Inter; padding: 3px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; }
+#coord i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 4px 0 6px; }
+
+#hint { position: fixed; top: 6vh; left: 50%; transform: translateX(-50%); display: flex; gap: 14px; align-items: center; padding: 7px 14px; border-radius: 10px; font: 500 11.5px Inter; white-space: nowrap; pointer-events: none; }
+#hint span { color: rgba(255, 255, 255, 0.6); }
+#hint kbd { margin-right: 5px; }
+
+#bar { position: fixed; left: 50%; bottom: 4.5vh; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 6px; border-radius: 14px; white-space: nowrap; }
+#bar .sep { width: 1px; height: 20px; background: rgba(255, 255, 255, 0.15); margin: 0 6px; }
+#bar .opt { font: 500 12px Inter; padding: 0 10px; height: 30px; display: flex; align-items: center; gap: 5px; border-radius: 8px; color: #e5e5ea; }
+#bar .opt:hover, #bar .opt.on { background: rgba(255, 255, 255, 0.17); }
+#bar .b1 { margin-left: 4px; }
+
+#pop { position: fixed; left: 50%; bottom: calc(4.5vh + 52px); transform: translateX(-50%); width: 430px; padding: 14px; border-radius: 14px; font: 500 12px Inter; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; background: var(--glass-strong); }
+#pop .full { grid-column: 1 / -1; height: 1px; background: rgba(255, 255, 255, 0.1); margin: -4px 0; }
+#pop .field { width: 100%; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border-radius: 7px; background: var(--fill); border: 1px solid var(--fill); }
+#pop .field .grow { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+#pop .toggles { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+#pop .tog { display: flex; align-items: center; justify-content: space-between; height: 26px; gap: 10px; }

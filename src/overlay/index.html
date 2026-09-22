@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>rshot overlay</title>
+  </head>
+  <body data-mode="area">
+    <canvas id="frame"></canvas>
+    <div id="shade"></div>
+    <div id="winhl" hidden></div>
+    <div id="winlabel" class="glass" hidden><b></b><small></small></div>
+    <div id="sel" hidden>
+      <span class="h" data-h="nw"></span><span class="h" data-h="n"></span><span class="h" data-h="ne"></span>
+      <span class="h" data-h="w"></span><span class="h" data-h="e"></span>
+      <span class="h" data-h="sw"></span><span class="h" data-h="s"></span><span class="h" data-h="se"></span>
+      <div id="dim" class="glass"></div>
+    </div>
+    <div id="loupe" hidden><canvas width="110" height="110"></canvas></div>
+    <div id="coord" class="glass" hidden></div>
+    <div id="hint" class="glass" hidden>
+      <div><kbd>drag</kbd><span>select area</span></div>
+      <div><kbd>Space</kbd><span>window mode</span></div>
+      <div><kbd>⏎</kbd><span>capture</span></div>
+      <div><kbd>Esc</kbd><span>cancel</span></div>
+    </div>
+    <div id="bar" class="glass" hidden>
+      <button class="btn" data-act="cancel" data-icon="i-x" title="Cancel (Esc)" aria-label="Cancel"></button>
+      <span class="sep"></span>
+      <button class="btn" data-mode="screen" data-icon="i-screen" title="Capture screen" aria-label="Capture screen"></button>
+      <button class="btn" data-mode="window" data-icon="i-window" title="Capture window (Space)" aria-label="Capture window"></button>
+      <button class="btn" data-mode="area" data-icon="i-area" title="Capture area" aria-label="Capture area"></button>
+      <span class="sep"></span>
+      <button class="opt" data-act="options" aria-haspopup="true">Options <svg class="ic sm" aria-hidden="true"><use href="#i-down" /></svg></button>
+      <button class="b1" data-act="capture">Capture</button>
+    </div>
+    <div id="pop" class="glass" hidden></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

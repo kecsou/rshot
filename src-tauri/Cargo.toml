@@ -23,3 +23,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 x11rb = { version = "0.14", features = ["xfixes"] }
+
+# Optimise dependencies (xcap, image/png) in dev builds; a debug capture takes seconds otherwise.
+[profile.dev.package."*"]
+opt-level = 2

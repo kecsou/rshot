@@ -6,8 +6,9 @@ use tauri::{
     AppHandle,
 };
 
-use crate::cli::Cmd;
+use crate::{capture::Frame, cli::Cmd, err};
 use std::time::Duration;
+use tauri::{Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     let item = |id: &str, text: &str| MenuItem::with_id(app, id, text, true, None::<&str>);
@@ -43,4 +44,57 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
     Ok(())
+}
+
+pub fn overlay_index(label: &str) -> Option<usize> {
+    label.strip_prefix("overlay-")?.parse().ok()
+}
+
+fn overlay_window(app: &AppHandle, i: usize) -> tauri::Result<WebviewWindow> {
+    let label = format!("overlay-{i}");
+    if let Some(w) = app.get_webview_window(&label) {
+        return Ok(w);
+    }
+    WebviewWindowBuilder::new(app, label, WebviewUrl::App("overlay/index.html".into()))
+        .title("rshot overlay")
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(false)
+        .visible(false)
+        .build()
+}
+
+/// One hidden overlay per monitor, loaded ahead of time so Print feels instant.
+pub fn ensure_overlays(app: &AppHandle) -> tauri::Result<()> {
+    let n = xcap::Monitor::all().map(|m| m.len()).unwrap_or(1).max(1);
+    for i in 0..n {
+        overlay_window(app, i)?;
+    }
+    Ok(())
+}
+
+/// Puts overlay i fullscreen on frame i's monitor (only when it isn't there already).
+pub fn place_overlays(app: &AppHandle, frames: &[Frame]) -> Result<(), String> {
+    for (i, f) in frames.iter().enumerate() {
+        let w = overlay_window(app, i).map_err(err)?;
+        let pos = PhysicalPosition::new(f.x, f.y);
+        if w.outer_position().ok() != Some(pos) || !w.is_fullscreen().unwrap_or(false) {
+            w.set_fullscreen(false).map_err(err)?;
+            w.set_position(pos).map_err(err)?;
+            w.set_size(PhysicalSize::new(f.image.width(), f.image.height())).map_err(err)?;
+            w.set_fullscreen(true).map_err(err)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn hide_overlays(app: &AppHandle) {
+    for (label, w) in app.webview_windows() {
+        if label.starts_with("overlay-") {
+            let _ = w.hide();
+        }
+    }
+    let _ = app.emit("overlay:hide", ());
 }

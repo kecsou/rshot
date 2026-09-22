@@ -3,6 +3,7 @@
 mod capture;
 mod cli;
 mod clipboard;
+mod overlay;
 mod pipeline;
 mod store;
 mod ui;
@@ -18,6 +19,8 @@ pub struct AppState {
     pub config: std::sync::Mutex<store::Config>,
     pub clipboard: clipboard::Clipboard,
     pub last_capture: std::sync::Mutex<Option<std::path::PathBuf>>,
+    pub session: std::sync::Mutex<Option<overlay::Session>>,
+    pub next_token: std::sync::atomic::AtomicU64,
 }
 
 impl AppState {
@@ -26,6 +29,8 @@ impl AppState {
             config: std::sync::Mutex::new(store::load_config()),
             clipboard: clipboard::Clipboard::spawn(),
             last_capture: std::sync::Mutex::new(None),
+            session: std::sync::Mutex::new(None),
+            next_token: std::sync::atomic::AtomicU64::new(1),
         }
     }
 }
@@ -47,8 +52,17 @@ fn main() {
         }))
         .manage(AppState::new())
         .plugin(tauri_plugin_notification::init())
+        .invoke_handler(tauri::generate_handler![
+            overlay::overlay_info,
+            overlay::overlay_frame,
+            overlay::overlay_ready,
+            overlay::overlay_activate,
+            overlay::overlay_cancel,
+            overlay::overlay_capture,
+        ])
         .setup(move |app| {
             ui::create_tray(app.handle())?;
+            ui::ensure_overlays(app.handle())?;
             dispatch(app.handle(), cmd);
             Ok(())
         })
@@ -70,7 +84,7 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
     use cli::Cmd::*;
     let result = match cmd {
         Daemon | RestoreShortcuts => Ok(()),
-        CaptureArea => pipeline::capture_screen_now(app), // Task 5 switches this to the overlay
+        CaptureArea => overlay::start(app, "area"),
         CaptureScreen => pipeline::capture_screen_now(app),
         CaptureWindow => pipeline::capture_window_now(app),
     };

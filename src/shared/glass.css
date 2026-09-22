@@ -1,0 +1,59 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
+:root {
+  --accent: #0a84ff;
+  --ok: #30d158;
+  --danger: #ff453a;
+  --text: #f2f2f7;
+  --text-2: rgba(255, 255, 255, 0.55);
+  --text-3: rgba(255, 255, 255, 0.45);
+  --glass: rgba(40, 40, 46, 0.68);
+  --glass-strong: rgba(40, 40, 46, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --surface: #1b1b1f;
+  --surface-2: #232328;
+  --line: rgba(255, 255, 255, 0.07);
+  --fill: rgba(255, 255, 255, 0.08);
+  --fill-on: rgba(255, 255, 255, 0.2);
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: transparent; user-select: none; -webkit-user-select: none; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: default; }
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+  color: var(--text);
+}
+
+.ic { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.ic.sm { width: 13px; height: 13px; }
+
+.btn { width: 36px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: #d9d9e0; }
+.btn:hover { background: rgba(255, 255, 255, 0.1); }
+.btn.on { background: rgba(255, 255, 255, 0.17); color: #fff; }
+.b1 { height: 30px; padding: 0 16px; border-radius: 8px; display: flex; align-items: center; font: 600 12px Inter; background: var(--accent); color: #fff; }
+.b2 { height: 30px; padding: 0 12px; border-radius: 8px; display: flex; align-items: center; gap: 6px; font: 600 12px Inter; background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+.seg { display: flex; padding: 2px; border-radius: 8px; background: var(--fill); }
+.seg button { flex: 1; padding: 4px 10px; border-radius: 6px; color: rgba(255, 255, 255, 0.75); font: 500 12px Inter; white-space: nowrap; }
+.seg button.on { background: var(--fill-on); color: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+
+.switch { width: 30px; height: 18px; border-radius: 9px; background: rgba(255, 255, 255, 0.18); position: relative; flex-shrink: 0; }
+.switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); transition: left 0.15s; }
+.switch.on { background: var(--accent); }
+.switch.on::after { left: 14px; }
+
+kbd { font: 600 10px Inter; color: #fff; background: rgba(255, 255, 255, 0.14); border-radius: 5px; padding: 2px 6px; }
+.lbl { font: 600 10px Inter; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); margin-bottom: 6px; }
