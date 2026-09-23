@@ -13,9 +13,9 @@ pop.innerHTML = `
     <div class="seg">${[0, 3, 5, 10].map((n) => `<button data-timer="${n}">${n ? `${n} s` : 'Off'}</button>`).join('')}</div></div>
   <div class="full"></div>
   <div class="toggles">
-    <label class="tog">Show floating thumbnail<button class="switch" role="switch" data-opt="show_thumbnail"></button></label>
-    <label class="tog">Remember last selection<button class="switch" role="switch" data-opt="remember_selection"></button></label>
-    <label class="tog">Show mouse pointer<button class="switch" role="switch" data-opt="show_pointer" title="Applies from the next capture"></button></label>
+    <div class="tog">Show floating thumbnail<button class="switch" role="switch" data-opt="show_thumbnail" aria-label="Show floating thumbnail"></button></div>
+    <div class="tog">Remember last selection<button class="switch" role="switch" data-opt="remember_selection" aria-label="Remember last selection"></button></div>
+    <div class="tog">Show mouse pointer<button class="switch" role="switch" data-opt="show_pointer" aria-label="Show mouse pointer" title="Applies from the next capture"></button></div>
   </div>
   <div><div class="lbl">Microphone (recording)</div><select class="field" id="mic" aria-label="Microphone"><option value="">None</option></select></div>`;
 
@@ -55,6 +55,7 @@ export function renderOptions(o: ipc.OverlayOptions) {
 export const optionsOpen = () => !pop.hidden;
 
 export function closeOptions() {
+  if (pop.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
   pop.hidden = true;
   optionsButton()?.classList.remove('on');
 }
@@ -66,7 +67,9 @@ export function toggleOptions() {
 }
 
 pop.addEventListener('click', async (e) => {
-  const b = (e.target as Element).closest<HTMLElement>('button');
+  // A toggle row's text flips its switch, as a label would (without taking focus).
+  const t = e.target as Element;
+  const b = t.closest<HTMLElement>('button') ?? t.closest('.tog')?.querySelector<HTMLElement>('button');
   if (!b || !opts) return;
   if (b.dataset.timer) opts.timer_secs = Number(b.dataset.timer);
   else if (b.dataset.opt) {

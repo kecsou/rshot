@@ -9,6 +9,7 @@ body { display: flex; align-items: center; justify-content: flex-end; padding: 0
 .meter i { width: 3px; height: 2px; border-radius: 1px; background: var(--ok); display: block; transition: height 0.1s linear; }
 .ghost { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.1); color: #ddd; }
 .ghost:hover { background: rgba(255, 255, 255, 0.18); }
+.ghost.armed { background: var(--danger); color: #fff; }
 .ghost .ic { width: 13px; height: 13px; }
 .stop { height: 28px; padding: 0 12px 0 10px; border-radius: 99px; background: var(--danger); display: flex; align-items: center; gap: 7px; color: #fff; font: 600 12px Inter; }
 .stop i { width: 10px; height: 10px; border-radius: 2px; background: #fff; display: block; }

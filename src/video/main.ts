@@ -214,6 +214,8 @@ $('#reveal').addEventListener('click', () => void ipc.revealCapture(info.path));
 $('#delete').addEventListener('click', () => void remove());
 addEventListener('keydown', (e) => {
   if (!$('#modal').hidden) return;
+  // A focused control (a button clicked last, the mute switch) keeps Enter and Space for itself.
+  if ((e.target as Element).closest('button, select, input') && (e.key === 'Enter' || e.key === ' ')) return;
   // Ctrl+C = Copy, on any layout (usKey maps the physical key, and ignores AltGr).
   if ((e.ctrlKey || e.metaKey) && [e.key.toLowerCase(), usKey(e)].includes('c')) {
     e.preventDefault();

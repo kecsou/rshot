@@ -255,7 +255,7 @@ for (const el of [bar, q('#pop')]) {
   el.addEventListener(
     'mousedown',
     (e) => {
-      if (!(e.target as Element).closest('button')) return;
+      if (!(e.target as Element).closest('button, .tog')) return;
       e.preventDefault();
       (document.activeElement as HTMLElement | null)?.blur();
     },

@@ -630,6 +630,8 @@ function shortcut(e: KeyboardEvent, k: string): boolean {
 
 addEventListener('keydown', (e) => {
   if (editingText || !$('#modal').hidden) return;
+  // A focused control (a button clicked last, a switch) keeps Enter and Space for itself.
+  if ((e.target as Element).closest('button, select, input') && (e.key === 'Enter' || e.key === ' ')) return;
   if (!shortcut(e, e.key.toLowerCase())) {
     const k = M.usKey(e);
     if (k) shortcut(e, k);

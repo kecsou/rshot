@@ -27,4 +27,15 @@ void poll();
 setInterval(() => void poll(), 100);
 
 $('#stop').addEventListener('click', () => void ipc.recordingStop());
-$('#discard').addEventListener('click', () => void ipc.recordingDiscard());
+// Discard sits next to Stop: the first click only arms it (red), and a second one within 3 s discards.
+const discard = $('#discard');
+const arm = (on: boolean) => {
+  discard.classList.toggle('armed', on);
+  discard.title = on ? 'Click again to discard' : 'Discard recording';
+  discard.setAttribute('aria-label', discard.title);
+};
+discard.addEventListener('click', () => {
+  if (discard.classList.contains('armed')) return void ipc.recordingDiscard();
+  arm(true);
+  setTimeout(() => arm(false), 3000);
+});
