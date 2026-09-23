@@ -1,6 +1,6 @@
 #!/bin/sh
 # Give the screenshot shortcuts back to GNOME for every logged-in user (best effort).
-# Users who aren't logged in can run `gsettings reset org.gnome.shell.keybindings show-screenshot-ui` etc. (see README).
+# Users who weren't logged in can do it by hand: see "Give the shortcuts back" in the README.
 set -e
 case "$1" in
   remove|purge)

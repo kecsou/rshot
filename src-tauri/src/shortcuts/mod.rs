@@ -41,6 +41,11 @@ pub fn restore(_cfg: &mut Config) -> Result<(), String> {
 
 /// `rshot restore-shortcuts`: works with no daemon running (used by uninstallers).
 pub fn restore_from_cli() -> Result<(), String> {
+    // No config = rshot never ran for this user (prerm runs this for everyone logged in,
+    // gdm included): nothing to restore, and no config.toml to create.
+    if !store::config_path().exists() {
+        return Ok(());
+    }
     let mut c = store::load_config();
     restore(&mut c)?;
     c.takeover = false;

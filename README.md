@@ -30,12 +30,19 @@ rshot restore-shortcuts
 ```
 
 Uninstalling the `.deb` does this for every logged-in user. If it was removed while you were
-logged out:
+logged out, give GNOME its keys back and remove rshot's three custom shortcuts (or delete the
+three **rshot** entries in Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts):
 
 ```bash
 gsettings reset org.gnome.shell.keybindings show-screenshot-ui
 gsettings reset org.gnome.shell.keybindings screenshot
 gsettings reset org.gnome.shell.keybindings screenshot-window
+k=org.gnome.settings-daemon.plugins.media-keys
+gsettings set $k custom-keybindings "$(gsettings get $k custom-keybindings |
+  sed -E "s#'[^']*/rshot-(area|screen|window)/'##g; s#(, )+#, #g; s#\[, #[#; s#, \]#]#")"
+for id in area screen window; do
+  dconf reset -f /org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/rshot-$id/
+done
 ```
 
 ## Other desktops
