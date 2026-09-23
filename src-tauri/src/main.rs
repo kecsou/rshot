@@ -3,6 +3,7 @@
 mod capture;
 mod cli;
 mod clipboard;
+mod editor;
 mod overlay;
 mod pipeline;
 mod settings;
@@ -18,7 +19,7 @@ pub fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-/// Lock order: session → config; never hold a mutex across a Tauri call that needs the main thread.
+/// Lock order: session → config → editors; never hold a mutex across a Tauri call that needs the main thread.
 pub struct AppState {
     pub config: std::sync::Mutex<store::Config>,
     pub clipboard: clipboard::Clipboard,
@@ -27,6 +28,8 @@ pub struct AppState {
     pub next_token: std::sync::atomic::AtomicU64,
     pub pending: std::sync::Mutex<Option<overlay::Pending>>,
     pub thumb: std::sync::Mutex<Option<thumbnail::Thumb>>,
+    /// Editor window label → the (canonical) file it edits.
+    pub editors: std::sync::Mutex<std::collections::HashMap<String, std::path::PathBuf>>,
 }
 
 impl AppState {
@@ -39,6 +42,7 @@ impl AppState {
             next_token: std::sync::atomic::AtomicU64::new(1),
             pending: std::sync::Mutex::new(None),
             thumb: std::sync::Mutex::new(None),
+            editors: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -118,9 +122,13 @@ fn main() {
             thumbnail::thumbnail_info,
             thumbnail::read_capture,
             thumbnail::reveal_capture,
-            thumbnail::open_capture,
             thumbnail::delete_capture,
             thumbnail::retry_copy,
+            editor::open_editor,
+            editor::editor_info,
+            editor::save_image,
+            editor::editor_delete,
+            editor::copy_path,
             settings::get_settings,
             settings::set_settings,
             settings::onboarding_choice,

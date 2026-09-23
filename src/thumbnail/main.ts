@@ -57,14 +57,15 @@ async function run() {
   card.addEventListener('click', async (e) => {
     const b = (e.target as Element).closest<HTMLButtonElement>('button');
     if (!b) return;
-    if (b.dataset.act === 'reveal') await ipc.revealCapture(t.path);
+    if (b.dataset.act === 'edit') await ipc.openEditor(t.path);
+    else if (b.dataset.act === 'reveal') await ipc.revealCapture(t.path);
     else if (b.dataset.act === 'delete') await ipc.deleteCapture(t.path);
     else if (b.id === 'retry') {
       await ipc.retryCopy(t.path).then(() => setCopied(true)).catch(() => setCopied(false));
     }
   });
 
-  // Click → open; drag right → swipe away; any other drag → drag the file into another app.
+  // Click → edit; drag right → swipe away; any other drag → drag the file into another app.
   card.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || (e.target as Element).closest('button')) return;
     const sx = e.clientX;
@@ -89,7 +90,7 @@ async function run() {
       if (mode === 'swipe') {
         if (u.clientX - sx > 80) dismiss();
         else card.style.transform = '';
-      } else if (mode === 'none') void ipc.openCapture(t.path);
+      } else if (mode === 'none') void ipc.openEditor(t.path);
     };
     const cleanup = () => {
       removeEventListener('pointermove', onMove);

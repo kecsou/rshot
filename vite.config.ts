@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
 
-const pages = ['overlay', 'countdown', 'thumbnail', 'settings', 'onboarding'];
+const pages = ['overlay', 'countdown', 'thumbnail', 'settings', 'onboarding', 'editor'];
 
 export default defineConfig({
   root: 'src',

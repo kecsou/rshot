@@ -72,7 +72,6 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn open_last(app: &AppHandle) -> Result<(), String> {
-    use tauri_plugin_opener::OpenerExt;
     let last = app
         .state::<crate::AppState>()
         .last_capture
@@ -80,9 +79,10 @@ fn open_last(app: &AppHandle) -> Result<(), String> {
         .unwrap()
         .clone();
     let path = last.ok_or("No capture yet")?;
-    app.opener()
-        .open_path(path.to_string_lossy(), None::<&str>)
-        .map_err(err)
+    if !path.exists() {
+        return Err("The last capture no longer exists".into());
+    }
+    open_editor(app, &path)
 }
 
 fn open_folder(app: &AppHandle) -> Result<(), String> {
@@ -315,6 +315,81 @@ fn monitor_at(app: &AppHandle, x: f64, y: f64) -> Result<tauri::Monitor, String>
         .map_err(err)?
         .or(app.primary_monitor().map_err(err)?)
         .ok_or_else(|| "no monitor".to_string())
+}
+
+/// One editor per file: refocus it if it's open, otherwise open one at 80 % of the monitor under
+/// the pointer. The map holds canonical paths, so the thumbnail and the tray find the same window.
+pub fn open_editor(app: &AppHandle, path: &std::path::Path) -> Result<(), String> {
+    let path = path.canonicalize().map_err(err)?;
+    let state = app.state::<crate::AppState>();
+    let existing = state
+        .editors
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|(_, p)| **p == path)
+        .map(|(label, _)| label.clone());
+    let win = match existing.and_then(|label| app.get_webview_window(&label)) {
+        Some(w) => w,
+        None => new_editor(app, path)?,
+    };
+    win.show().map_err(err)?;
+    win.set_focus().map_err(err)?;
+    // Mutter ignores set_focus for windows opened from another app's click (Plan 1 Task 6/13).
+    #[cfg(target_os = "linux")]
+    force_focus(&win);
+    Ok(())
+}
+
+fn new_editor(app: &AppHandle, path: std::path::PathBuf) -> Result<WebviewWindow, String> {
+    let cursor = app.cursor_position().map_err(err)?;
+    let m = monitor_at(app, cursor.x, cursor.y)?;
+    let s = m.scale_factor();
+    let (mw, mh) = (m.size().width as f64 / s, m.size().height as f64 / s);
+    let (w, h) = ((mw * 0.8).max(800.0), (mh * 0.8).max(560.0));
+    let label = format!(
+        "editor-{}",
+        POPUP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    );
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    app.state::<crate::AppState>()
+        .editors
+        .lock()
+        .unwrap()
+        .insert(label.clone(), path);
+    let win = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("editor/index.html".into()))
+        .title(format!("{name} — rshot"))
+        .decorations(false)
+        .transparent(true)
+        .resizable(true)
+        .min_inner_size(800.0, 560.0)
+        .inner_size(w, h)
+        .visible(false)
+        .build()
+        .inspect_err(|_| forget_editor(app, &label))
+        .map_err(err)?;
+    // The path stays readable (thumbnail::guard) exactly as long as its editor is open.
+    let app2 = app.clone();
+    win.on_window_event(move |e| {
+        if let tauri::WindowEvent::Destroyed = e {
+            forget_editor(&app2, &label);
+        }
+    });
+    let x = m.position().x + ((m.size().width as f64 - w * s) / 2.0) as i32;
+    let y = m.position().y + ((m.size().height as f64 - h * s) / 2.0) as i32;
+    win.set_position(PhysicalPosition::new(x, y)).map_err(err)?;
+    Ok(win)
+}
+
+fn forget_editor(app: &AppHandle, label: &str) {
+    app.state::<crate::AppState>()
+        .editors
+        .lock()
+        .unwrap()
+        .remove(label);
 }
 
 /// Countdown ring centred on a desktop point (physical pixels).

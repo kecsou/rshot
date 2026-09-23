@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>rshot editor</title>
+  </head>
+  <body data-tool="arrow">
+    <div class="ed">
+      <header data-tauri-drag-region>
+        <span class="title" id="title"></span><span class="meta" id="meta"></span><span class="sp" data-tauri-drag-region></span>
+        <button class="ib" id="undo" data-icon="i-undo" title="Undo (Ctrl+Z)" aria-label="Undo"></button>
+        <button class="ib" id="redo" data-icon="i-redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"></button>
+        <span class="vsep"></span>
+        <button class="ib" id="delete" data-icon="i-trash" title="Delete capture" aria-label="Delete capture"></button>
+        <button class="b2" id="copy" data-icon="i-copy" title="Copy path + image (Ctrl+C)">Copy</button>
+        <button class="b1" id="done" title="Save and close (Ctrl+S)">Done</button>
+        <button class="wx" id="close" data-icon="i-x" aria-label="Close"></button>
+      </header>
+      <div class="body">
+        <div class="stage" id="stage"><canvas id="view"></canvas><textarea id="texted" hidden spellcheck="false"></textarea></div>
+        <div class="rail glass" id="rail">
+          <button data-tool="select" data-icon="t-select" title="Select (V)" aria-label="Select"></button>
+          <button data-tool="crop" data-icon="t-crop" title="Crop (C)" aria-label="Crop"></button>
+          <span class="hsep"></span>
+          <button data-tool="arrow" data-icon="t-arrow" title="Arrow (A)" aria-label="Arrow"></button>
+          <button data-tool="rect" data-icon="t-rect" title="Rectangle (R)" aria-label="Rectangle"></button>
+          <button data-tool="ellipse" data-icon="t-ellipse" title="Ellipse (O)" aria-label="Ellipse"></button>
+          <button data-tool="line" data-icon="t-line" title="Line (L)" aria-label="Line"></button>
+          <button data-tool="pen" data-icon="t-pen" title="Pen (P)" aria-label="Pen"></button>
+          <button data-tool="highlight" data-icon="t-hl" title="Highlighter (H)" aria-label="Highlighter"></button>
+          <button data-tool="text" data-icon="t-text" title="Text (T)" aria-label="Text"></button>
+          <button data-tool="counter" data-icon="t-num" title="Step counter (N)" aria-label="Step counter"></button>
+          <button data-tool="redact" data-icon="t-blur" title="Redact (B)" aria-label="Redact"></button>
+          <span class="hsep"></span>
+          <button id="swatch" title="Style" aria-label="Style"><i></i></button>
+        </div>
+        <div id="pop" class="glass" hidden></div>
+        <div id="cropbar" class="glass" hidden>
+          <div class="seg" id="ratios"><button data-ratio="free">Free</button><button data-ratio="16:9">16:9</button><button data-ratio="4:3">4:3</button><button data-ratio="1:1">1:1</button></div>
+          <span class="dimv" id="cropdim"></span>
+          <button class="b2" id="crop-cancel">Cancel</button>
+          <button class="b1" id="crop-apply">Apply ⏎</button>
+        </div>
+        <div id="modal" hidden><div class="glass box"><p id="modal-text"></p><div class="acts" id="modal-acts"></div></div></div>
+      </div>
+      <footer>
+        <div class="chip">
+          <span class="ok"><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg></span><span class="p" id="path"></span>
+          <button class="cp" id="copy-path" data-icon="i-copy" title="Copy path" aria-label="Copy path"></button>
+          <button class="cp" id="reveal" data-icon="i-folder" title="Show in folder" aria-label="Show in folder"></button>
+        </div>
+        <div class="zoom">
+          <span class="dirty" id="dirty" hidden><i></i>Unsaved changes</span>
+          <button class="ib" id="zoom-out" data-icon="i-minus" title="Zoom out (Ctrl+-)" aria-label="Zoom out"></button>
+          <span id="zoom-val"></span>
+          <button class="ib" id="zoom-in" data-icon="i-plus" title="Zoom in (Ctrl++)" aria-label="Zoom in"></button>
+          <button class="b2" id="fit" title="Fit (Ctrl+0)">Fit</button>
+        </div>
+      </footer>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

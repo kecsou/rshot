@@ -37,7 +37,6 @@ export type Thumb = { path: string; display: string; copied: boolean };
 export const thumbnailInfo = () => invoke<Thumb | null>('thumbnail_info');
 export const readCapture = (path: string) => invoke<ArrayBuffer>('read_capture', { path });
 export const revealCapture = (path: string) => invoke<void>('reveal_capture', { path });
-export const openCapture = (path: string) => invoke<void>('open_capture', { path });
 export const deleteCapture = (path: string) => invoke<void>('delete_capture', { path });
 export const retryCopy = (path: string) => invoke<void>('retry_copy', { path });
 export const dismissThumbnail = () => invoke<void>('close_window'); // this card only
@@ -65,3 +64,11 @@ export const setSettings = (settings: Settings) => invoke<Settings>('set_setting
 export const onboardingChoice = (accept: boolean) => invoke<void>('onboarding_choice', { accept });
 export const openConfig = () => invoke<void>('open_config');
 export const closeWindow = () => invoke<void>('close_window');
+
+export type EditorInfo = { path: string; display: string; name: string };
+export const openEditor = (path: string) => invoke<void>('open_editor', { path });
+export const editorInfo = () => invoke<EditorInfo>('editor_info');
+/** Sends the PNG as a raw IPC body (no JSON/base64 round-trip). */
+export const saveImage = (png: Uint8Array) => invoke<void>('save_image', png);
+export const editorDelete = () => invoke<void>('editor_delete');
+export const copyPath = (path: string) => invoke<void>('copy_path', { path });

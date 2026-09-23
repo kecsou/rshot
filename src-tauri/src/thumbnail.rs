@@ -21,13 +21,14 @@ pub fn tildify(p: &Path) -> String {
     }
 }
 
-/// Only the last capture may be read, opened or deleted from a webview. Both paths are canonical.
-/// (The screenshots folder is settable from a webview, so "anything in it" would be a hole.)
-fn allowed(p: &Path, last: Option<&Path>) -> bool {
-    last == Some(p)
+/// Only the last capture and files open in an editor may be read, opened or deleted from a
+/// webview. All paths are canonical. (The screenshots folder is settable from a webview, so
+/// "anything in it" would be a hole.)
+fn allowed(p: &Path, last: Option<&Path>, open: &[PathBuf]) -> bool {
+    last == Some(p) || open.iter().any(|o| o == p)
 }
 
-fn guard(state: &AppState, path: &str) -> Result<PathBuf, String> {
+pub(crate) fn guard(state: &AppState, path: &str) -> Result<PathBuf, String> {
     let p = Path::new(path).canonicalize().map_err(err)?;
     let last = state
         .last_capture
@@ -35,10 +36,13 @@ fn guard(state: &AppState, path: &str) -> Result<PathBuf, String> {
         .unwrap()
         .as_ref()
         .and_then(|l| l.canonicalize().ok());
-    if allowed(&p, last.as_deref()) {
+    // Editor paths were canonicalized when opened: compare as is, so a file swapped for a
+    // symlink since then doesn't pass.
+    let open: Vec<PathBuf> = state.editors.lock().unwrap().values().cloned().collect();
+    if allowed(&p, last.as_deref(), &open) {
         Ok(p)
     } else {
-        Err("not the last capture".into())
+        Err("not the last capture or a file open in the editor".into())
     }
 }
 
@@ -62,19 +66,6 @@ pub fn reveal_capture(
 ) -> Result<(), String> {
     app.opener()
         .reveal_item_in_dir(guard(&state, &path)?)
-        .map_err(err)
-}
-
-#[tauri::command]
-pub fn open_capture(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    path: String,
-) -> Result<(), String> {
-    let p = guard(&state, &path)?;
-    ui::close_prefix(&app, "thumbnail");
-    app.opener()
-        .open_path(p.to_string_lossy(), None::<&str>)
         .map_err(err)
 }
 
@@ -110,24 +101,26 @@ pub fn retry_copy(state: State<'_, AppState>, path: String) -> Result<(), String
 #[cfg(test)]
 mod tests {
     #[test]
-    fn only_the_last_capture_is_allowed() {
+    fn only_the_last_capture_or_an_open_file_is_allowed() {
         let dir = std::env::temp_dir().join(format!("rshot-guard-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("sub")).unwrap();
-        for f in ["last.png", "other.png"] {
+        for f in ["last.png", "other.png", "edited.png"] {
             std::fs::write(dir.join(f), b"x").unwrap();
         }
         let canon = |p: std::path::PathBuf| p.canonicalize().unwrap();
         let last = canon(dir.join("last.png"));
-        assert!(super::allowed(
-            &canon(dir.join("sub/../last.png")),
-            Some(&last)
-        ));
-        assert!(!super::allowed(&canon(dir.join("other.png")), Some(&last)));
-        assert!(!super::allowed(
-            &canon(dir.join("sub/../other.png")),
-            Some(&last)
-        ));
-        assert!(!super::allowed(&last, None));
+        let open = [canon(dir.join("edited.png"))];
+        let allowed = |p: &str, last: Option<&std::path::Path>, open: &[std::path::PathBuf]| {
+            super::allowed(&canon(dir.join(p)), last, open)
+        };
+        assert!(allowed("sub/../last.png", Some(&last), &[]));
+        assert!(!allowed("other.png", Some(&last), &[]));
+        assert!(!allowed("sub/../other.png", Some(&last), &open));
+        assert!(!allowed("last.png", None, &[]));
+        // Still readable after another capture replaced "last" (or none is left).
+        assert!(allowed("sub/../edited.png", Some(&last), &open));
+        assert!(allowed("edited.png", None, &open));
+        assert!(!allowed("edited.png", Some(&last), &[]));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
