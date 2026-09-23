@@ -55,7 +55,6 @@ function afterPrimary(token: number): Promise<void> {
 const isArea = () => mode === 'area' || mode === 'recarea';
 const isScreen = () => mode === 'screen' || mode === 'recscreen';
 const isRecord = () => mode === 'recarea' || mode === 'recscreen';
-const NO_FFMPEG = "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or install ffmpeg (sudo apt install ffmpeg).";
 
 /** Image pixels per CSS pixel (monitor scale); read live because the window size settles after show. */
 const k = () => (info ? info.width / innerWidth : 1);
@@ -84,8 +83,8 @@ async function load() {
   pointer = null;
   busy = false;
   bar.querySelectorAll<HTMLButtonElement>('[data-mode^="rec"]').forEach((b) => {
-    b.disabled = !next.ffmpeg;
-    b.title = next.ffmpeg ? b.getAttribute('aria-label')! : NO_FFMPEG;
+    b.disabled = next.record_off !== null;
+    b.title = next.record_off ?? b.getAttribute('aria-label')!;
   });
   renderOptions(next.options);
   render();

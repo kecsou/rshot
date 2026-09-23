@@ -61,15 +61,25 @@ pub fn grab_all(show_pointer: bool) -> Result<Vec<Frame>, String> {
 
 /// Index of the frame containing the desktop point, or 0.
 pub fn frame_at(frames: &[Frame], px: i32, py: i32) -> usize {
-    frames
-        .iter()
-        .position(|f| {
-            px >= f.x
-                && py >= f.y
-                && px < f.x + f.image.width() as i32
-                && py < f.y + f.image.height() as i32
-        })
-        .unwrap_or(0)
+    rect_at(
+        frames
+            .iter()
+            .map(|f| (f.x, f.y, f.image.width(), f.image.height())),
+        px,
+        py,
+    )
+    .unwrap_or(0)
+}
+
+/// Index of the first `(x, y, w, h)` rect containing the point (same units, e.g. physical px).
+pub fn rect_at(
+    rects: impl IntoIterator<Item = (i32, i32, u32, u32)>,
+    px: i32,
+    py: i32,
+) -> Option<usize> {
+    rects
+        .into_iter()
+        .position(|(x, y, w, h)| px >= x && py >= y && px < x + w as i32 && py < y + h as i32)
 }
 
 /// Rounds and clips an image-pixel rect to the frame; `None` when nothing is left.
@@ -244,6 +254,12 @@ mod tests {
         assert_eq!(frame_at(&fs, 3000, 10), 1);
         assert_eq!(frame_at(&fs, 5000, 1000), 2);
         assert_eq!(frame_at(&fs, 100, 10), 0);
+        // Right/bottom edges are exclusive; outside every rect is None.
+        let rects = [(0, 224, 1920, 1080), (1920, 0, 2560, 1600)];
+        assert_eq!(rect_at(rects, 1919, 300), Some(0));
+        assert_eq!(rect_at(rects, 1920, 300), Some(1));
+        assert_eq!(rect_at(rects, 100, 10), None);
+        assert_eq!(rect_at(rects, 2000, 1600), None);
     }
 
     #[test]

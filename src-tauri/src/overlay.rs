@@ -71,8 +71,8 @@ pub struct OverlayInfo {
     selection: Option<Rect>,
     hints: bool,
     options: OverlayOptions,
-    /// Recording needs ffmpeg; without it the record modes are disabled.
-    ffmpeg: bool,
+    /// Why the record modes are disabled (the button tooltip); `None` when they're available.
+    record_off: Option<&'static str>,
 }
 
 /// The hint bar shows on the first few overlays only.
@@ -89,10 +89,11 @@ pub fn epoch_ms() -> u128 {
 pub fn start(app: &AppHandle, mode: &str) -> Result<(), String> {
     let started = Instant::now();
     eprintln!("rshot: overlay requested at {}", epoch_ms());
-    ui::clear_own_ui(app);
+    let hidden = ui::clear_own_ui(app);
     let state = app.state::<AppState>();
     let show_pointer = state.config.lock().unwrap().show_pointer;
     let frames = capture::grab_all(show_pointer)?;
+    drop(hidden);
     eprintln!(
         "rshot: grabbed {} monitor(s) in {} ms",
         frames.len(),
@@ -120,7 +121,11 @@ pub fn start(app: &AppHandle, mode: &str) -> Result<(), String> {
 }
 
 #[tauri::command(async)]
-pub fn overlay_info(window: WebviewWindow, state: State<'_, AppState>) -> Option<OverlayInfo> {
+pub fn overlay_info(
+    app: AppHandle,
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+) -> Option<OverlayInfo> {
     let index = ui::overlay_index(window.label())?;
     let (mut info, x, y) = {
         let session = state.session.lock().unwrap();
@@ -148,13 +153,13 @@ pub fn overlay_info(window: WebviewWindow, state: State<'_, AppState>) -> Option
             selection,
             hints: c.hints_shown <= HINT_SESSIONS,
             options: OverlayOptions::from_config(&c),
-            ffmpeg: false,
+            record_off: None,
         };
         (info, f.x, f.y)
     };
     // Listing windows takes ~9 ms: not while holding the locks.
     info.windows = capture::windows_on(x, y, info.width, info.height);
-    info.ffmpeg = crate::recorder::ffmpeg_path().is_some();
+    info.record_off = crate::recorder::unavailable(&app);
     Some(info)
 }
 
@@ -347,6 +352,9 @@ fn record_from(
     index: usize,
     rect: Option<Rect>,
 ) -> Result<(), String> {
+    if let Some(why) = crate::recorder::unavailable(app) {
+        return Err(why.into());
+    }
     let frame = session
         .frames
         .into_iter()
@@ -457,12 +465,18 @@ pub fn countdown_cancel(app: AppHandle, state: State<'_, AppState>) {
 
 /// After the countdown: grab the live screen again and cut the same target.
 fn run_pending(app: &AppHandle, p: Pending) -> Result<(), String> {
-    ui::clear_own_ui(app);
+    let hidden = ui::clear_own_ui(app);
     let img = match p.target {
-        Target::Window { id, .. } => capture::window_image(id)?,
+        Target::Window { id, .. } => {
+            let img = capture::window_image(id);
+            drop(hidden);
+            img?
+        }
         target => {
             let show_pointer = app.state::<AppState>().config.lock().unwrap().show_pointer;
-            let f = capture::grab_all(show_pointer)?
+            let frames = capture::grab_all(show_pointer);
+            drop(hidden);
+            let f = frames?
                 .into_iter()
                 .find(|f| f.name == p.monitor)
                 .ok_or("that monitor is gone")?;

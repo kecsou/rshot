@@ -62,8 +62,26 @@ fn runnable(p: &Path) -> bool {
     p.is_file()
 }
 
+#[cfg(target_os = "linux")]
 pub const NO_FFMPEG: &str =
     "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or install ffmpeg (sudo apt install ffmpeg).";
+#[cfg(target_os = "macos")]
+pub const NO_FFMPEG: &str =
+    "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or install ffmpeg (brew install ffmpeg).";
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub const NO_FFMPEG: &str =
+    "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or put ffmpeg.exe on your PATH.";
+
+/// Why a new recording can't start now (no ffmpeg, or one is running); `None` when it can.
+pub fn unavailable(app: &AppHandle) -> Option<&'static str> {
+    if ffmpeg_path().is_none() {
+        Some(NO_FFMPEG)
+    } else if is_recording(app) {
+        Some("A recording is already running: stop it first.")
+    } else {
+        None
+    }
+}
 
 /// yuv420p needs even dimensions.
 #[cfg(target_os = "linux")]
@@ -620,6 +638,11 @@ mod tests {
             Some(SILENCE_DB)
         );
         assert_eq!(parse_level("lavfi.astats.Overall.RMS_level=3.5"), Some(0.0));
+        // As the drain reads it: with the newline.
+        assert_eq!(
+            parse_level("lavfi.astats.Overall.RMS_level=-21.5\n"),
+            Some(-21.5)
+        );
         assert_eq!(parse_level("frame:1    pts:4800    pts_time:0.1"), None);
         assert_eq!(parse_level("lavfi.astats.Overall.RMS_level=junk"), None);
     }

@@ -21,8 +21,8 @@ export type OverlayInfo = {
   selection: Rect | null;
   hints: boolean;
   options: OverlayOptions;
-  /** Recording needs ffmpeg: without it the record modes are disabled. */
-  ffmpeg: boolean;
+  /** Why the record modes are disabled (no ffmpeg, or a recording is running); null: available. */
+  record_off: string | null;
 };
 export type Target = { kind: 'area'; rect: Rect } | { kind: 'window'; id: number; rect: Rect } | { kind: 'screen' };
 

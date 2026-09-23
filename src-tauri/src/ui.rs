@@ -114,43 +114,69 @@ pub fn recording_started(
     }
     let m = monitor_at(app, r.x.into(), r.y.into())?;
     let s = m.scale_factor();
-    // recframe's CSS draws within 8 CSS px of the window edge: that many physical px per scale.
-    let margin = (8.0 * s).round() as i32;
+    // A frame that failed halfway (e.g. not click-through) goes; the pill comes up regardless.
+    let frame = show_frame(app, r, s);
+    if frame.is_err() {
+        close_prefix(app, "recframe");
+    }
+    let (pw, ph) = (300.0, 52.0);
+    let pill = popup(app, "pill", "pill/index.html", pw, ph, false)?;
+    // Within the work area: clear of the top bar and the dock.
+    let wa = m.work_area();
+    let (x, y) = pill_position(
+        r,
+        frame_margin(s),
+        ((pw * s) as i32, (ph * s) as i32, (4.0 * s) as i32),
+        (
+            wa.position.x,
+            wa.position.y,
+            wa.size.width as i32,
+            wa.size.height as i32,
+        ),
+    );
+    pill.set_position(PhysicalPosition::new(x, y))
+        .map_err(err)?;
+    #[cfg(target_os = "linux")]
+    unmanaged(&pill)?;
+    pill.show().map_err(err)?;
+    frame
+}
+
+/// The dashed frame around area `r` on a monitor of scale `s`: transparent and click-through.
+fn show_frame(app: &AppHandle, r: crate::recorder::Region, s: f64) -> Result<(), String> {
+    let (x, y, w, h) = frame_rect(r, s);
     let frame = popup(app, "recframe", "recframe/index.html", 100.0, 100.0, false)?;
     frame
-        .set_position(PhysicalPosition::new(r.x - margin, r.y - margin))
+        .set_position(PhysicalPosition::new(x, y))
         .map_err(err)?;
-    frame
-        .set_size(PhysicalSize::new(
-            r.w + 2 * margin as u32,
-            r.h + 2 * margin as u32,
-        ))
-        .map_err(err)?;
+    frame.set_size(PhysicalSize::new(w, h)).map_err(err)?;
     #[cfg(target_os = "linux")]
     unmanaged(&frame)?;
     // After show: tao sets the empty input shape on the GdkWindow, which a never-shown window
     // doesn't have yet (it unwraps it, aborting rshot).
     frame.show().map_err(err)?;
-    frame.set_ignore_cursor_events(true).map_err(err)?;
-    let (pw, ph) = (300.0, 52.0);
-    let pill = popup(app, "pill", "pill/index.html", pw, ph, false)?;
-    let (mp, ms) = (m.position(), m.size());
-    let (x, y) = pill_position(
-        r,
-        margin,
-        ((pw * s) as i32, (ph * s) as i32, (4.0 * s) as i32),
-        (mp.x, mp.y, ms.width as i32, ms.height as i32),
-    );
-    pill.set_position(PhysicalPosition::new(x, y))
-        .map_err(err)?;
-    pill.show().map_err(err)
+    frame.set_ignore_cursor_events(true).map_err(err)
 }
 
-/// Makes a not-yet-shown window override-redirect, i.e. not managed by the window manager: GNOME
-/// animates managed windows opening and closing by scaling them, which would sweep the recording
-/// frame's line across the recorded area, and could push a frame larger than the monitor back
-/// onto it. Queued before `show()`, so it runs first (Tauri handles both, in order, on the main
-/// thread, and the window's position and size are applied later, before it maps).
+/// How far the frame window reaches out of the area, in physical px: recframe.css draws within
+/// 8 CSS px of the window's edge.
+fn frame_margin(s: f64) -> i32 {
+    (8.0 * s).round() as i32
+}
+
+/// The frame window's `(x, y, w, h)` in physical px for area `r` on a monitor of scale `s`.
+fn frame_rect(r: crate::recorder::Region, s: f64) -> (i32, i32, u32, u32) {
+    let m = frame_margin(s);
+    (r.x - m, r.y - m, r.w + 2 * m as u32, r.h + 2 * m as u32)
+}
+
+/// Makes a not-yet-shown window override-redirect, i.e. not managed by the window manager, for
+/// the recording frame and pill. GNOME animates managed windows appearing and going (hiding one
+/// counts as going) by scaling and fading them: the frame's line would sweep across the recorded
+/// area, and a hidden pill would still be fading out in a screenshot. Mutter could also push a
+/// frame larger than the monitor back onto it, and focus the pill when it's shown again. Queued
+/// before `show()`, so it runs first (Tauri handles both, in order, on the main thread, and the
+/// window's position and size are applied later, before it maps).
 #[cfg(target_os = "linux")]
 fn unmanaged(w: &WebviewWindow) -> Result<(), String> {
     let w2 = w.clone();
@@ -166,8 +192,8 @@ fn unmanaged(w: &WebviewWindow) -> Result<(), String> {
 }
 
 /// The pill's top-left (physical px) for area `r` framed `margin` out: `gap` above the frame's
-/// top-right corner, else below the frame, and always on the monitor `(x, y, w, h)` (a monitor-tall
-/// area gets it over its bottom edge, in the video, rather than nowhere).
+/// top-right corner, else below the frame, and always inside the monitor's work area `(x, y, w, h)`
+/// (a monitor-tall area gets it over its bottom edge, in the video, rather than nowhere).
 fn pill_position(
     r: crate::recorder::Region,
     margin: i32,
@@ -462,9 +488,11 @@ pub fn close_prefix(app: &AppHandle, prefix: &str) -> bool {
 }
 
 /// Takes rshot's own UI off the screen before a new grab, so it can't end up in the capture: an
-/// open overlay session, a countdown (dropping its pending capture or recording) and the thumbnail card, all
-/// always-on-top. Waits for the compositor only when something was showing. Not on the main thread.
-pub fn clear_own_ui(app: &AppHandle) {
+/// open overlay session, a countdown (dropping its pending capture or recording), the thumbnail
+/// card, and a recording's frame and pill, all always-on-top. Those two are only hidden: they come
+/// back when the returned guard drops, so drop it right after the grab. Waits for the compositor
+/// only when something was showing. Not on the main thread.
+pub fn clear_own_ui(app: &AppHandle) -> Hidden {
     let state = app.state::<crate::AppState>();
     let overlay = state.session.lock().unwrap().take().is_some();
     if overlay {
@@ -474,8 +502,34 @@ pub fn clear_own_ui(app: &AppHandle) {
     state.pending_rec.lock().unwrap().take();
     let countdown = close_prefix(app, "countdown");
     let thumbnail = close_prefix(app, "thumbnail");
-    if overlay || countdown || thumbnail {
+    let recording: Vec<WebviewWindow> = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, w)| {
+            (label.starts_with("recframe-") || label.starts_with("pill-"))
+                && w.is_visible().unwrap_or(false)
+        })
+        .map(|(_, w)| w)
+        .collect();
+    for w in &recording {
+        let _ = w.hide();
+    }
+    if overlay || countdown || thumbnail || !recording.is_empty() {
         std::thread::sleep(Duration::from_millis(150));
+    }
+    Hidden(recording)
+}
+
+/// A recording's frame and pill, hidden by `clear_own_ui` for a grab: shown again on drop. (A
+/// recording that ended meanwhile has destroyed them; showing those fails, harmlessly.)
+#[must_use = "dropping it shows the recording's frame and pill again: keep it until the grab is done"]
+pub struct Hidden(Vec<WebviewWindow>);
+
+impl Drop for Hidden {
+    fn drop(&mut self) {
+        for w in &self.0 {
+            let _ = w.show();
+        }
     }
 }
 
@@ -504,11 +558,27 @@ pub fn popup(
         .map_err(err)
 }
 
+/// The monitor containing a desktop point in physical px (the cursor, a region), else the primary.
+/// Not `monitor_from_point`: on Linux that takes GDK logical coordinates, so at scale 2 it finds
+/// the wrong monitor, or none.
 fn monitor_at(app: &AppHandle, x: f64, y: f64) -> Result<tauri::Monitor, String> {
-    app.monitor_from_point(x, y)
-        .map_err(err)?
-        .or(app.primary_monitor().map_err(err)?)
-        .ok_or_else(|| "no monitor".to_string())
+    let mut all = app.available_monitors().map_err(err)?;
+    let i = crate::capture::rect_at(
+        all.iter().map(|m| {
+            let (p, s) = (m.position(), m.size());
+            (p.x, p.y, s.width, s.height)
+        }),
+        x as i32,
+        y as i32,
+    );
+    match i {
+        Some(i) => Ok(all.swap_remove(i)),
+        None => app
+            .primary_monitor()
+            .map_err(err)?
+            .or_else(|| all.into_iter().next())
+            .ok_or_else(|| "no monitor".to_string()),
+    }
 }
 
 /// One editor per file: refocus it if it's open, otherwise open one at 80 % of the monitor under
@@ -630,7 +700,38 @@ mod tests {
     use crate::recorder::Region;
 
     #[test]
-    fn pill_sits_outside_the_area_and_on_the_monitor() {
+    fn the_dashed_line_stays_outside_the_area() {
+        // recframe.css: the line is `inset: 3px` + `border: 2px`, i.e. 3..5 CSS px in from the
+        // window's edge, and a CSS px is `s` physical px.
+        const LINE_END: f64 = 5.0;
+        let a = Region {
+            x: 1000,
+            y: 300,
+            w: 641,
+            h: 377,
+        };
+        for s in [1.0, 1.25, 2.0] {
+            let (x, y, w, h) = frame_rect(a, s);
+            let (x, y, w, h) = (x as f64, y as f64, w as f64, h as f64);
+            let inner = LINE_END * s;
+            // At least 2 physical px clear of the area, which absorbs tao's logical rounding.
+            assert!(x + inner <= a.x as f64 - 2.0, "left at {s}");
+            assert!(y + inner <= a.y as f64 - 2.0, "top at {s}");
+            assert!(
+                x + w - inner >= (a.x + a.w as i32) as f64 + 2.0,
+                "right at {s}"
+            );
+            assert!(
+                y + h - inner >= (a.y + a.h as i32) as f64 + 2.0,
+                "bottom at {s}"
+            );
+        }
+        assert_eq!(frame_rect(a, 1.0), (992, 292, 657, 393));
+        assert_eq!(frame_rect(a, 2.0), (984, 284, 673, 409));
+    }
+
+    #[test]
+    fn pill_sits_outside_the_area_and_in_the_work_area() {
         let area = |x, y, w, h| Region { x, y, w, h };
         let pill = (300, 52, 4);
         let mon = (1920, 0, 2560, 1600);
@@ -658,6 +759,11 @@ mod tests {
         assert_eq!(
             pill_position(area(10, 10, 50, 50), 8, pill, (0, 0, 200, 40)),
             (0, 0)
+        );
+        // Under a 32 px top bar (the work area starts at y 32): below instead of under the bar.
+        assert_eq!(
+            pill_position(area(2500, 60, 600, 300), 8, pill, (1970, 32, 2510, 1568)),
+            (2800, 372)
         );
         // Scale 2: everything doubles.
         assert_eq!(

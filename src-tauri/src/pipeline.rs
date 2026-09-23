@@ -85,9 +85,10 @@ fn finish(app: &AppHandle, cfg: &Config, path: &Path, kind: &str, copied: Result
 }
 
 pub fn capture_screen_now(app: &AppHandle) -> Result<(), String> {
-    crate::ui::clear_own_ui(app);
+    let hidden = crate::ui::clear_own_ui(app);
     let show_pointer = app.state::<AppState>().config.lock().unwrap().show_pointer;
     let frames = capture::grab_all(show_pointer)?;
+    drop(hidden);
     let pos = app.cursor_position().map_err(err)?;
     let i = capture::frame_at(&frames, pos.x as i32, pos.y as i32);
     let frame = frames.into_iter().nth(i).ok_or("no monitor found")?;
@@ -95,8 +96,10 @@ pub fn capture_screen_now(app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn capture_window_now(app: &AppHandle) -> Result<(), String> {
-    crate::ui::clear_own_ui(app);
-    finish_capture(app, capture::focused_window_image()?).map(|_| ())
+    let hidden = crate::ui::clear_own_ui(app);
+    let img = capture::focused_window_image();
+    drop(hidden);
+    finish_capture(app, img?).map(|_| ())
 }
 
 #[cfg(target_os = "linux")]
