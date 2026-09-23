@@ -9,6 +9,7 @@ import { comboFrom } from './keys';
 mountIcons();
 let s = await ipc.getSettings();
 let rebinding: HTMLElement | null = null;
+const micSel = document.querySelector<HTMLSelectElement>('#mic')!;
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -19,6 +20,9 @@ function render() {
     b.setAttribute('aria-checked', String(on));
   });
   document.querySelector('#folder span')!.textContent = s.screenshots_dir;
+  document.querySelector('#rfolder span')!.textContent = s.recordings_dir;
+  document.querySelectorAll<HTMLElement>('#fps button').forEach((b) => b.classList.toggle('on', Number(b.dataset.fps) === s.fps));
+  micSel.value = s.mic ?? '';
   document.querySelectorAll<HTMLElement>('#clip button').forEach((b) => b.classList.toggle('on', b.dataset.v === s.clipboard_mode));
   document.querySelectorAll<HTMLElement>('[data-shortcut]').forEach((b) => {
     if (b === rebinding) {
@@ -66,15 +70,34 @@ document.addEventListener('click', async (e) => {
   } else if (b.dataset.v) {
     const mode = b.dataset.v as ipc.ClipboardMode;
     await update((f) => (f.clipboard_mode = mode));
+  } else if (b.dataset.fps) {
+    const fps = Number(b.dataset.fps);
+    await update((f) => (f.fps = fps));
   } else if (b.id === 'folder') {
     const d = await ipc.pickFolder();
     if (d) await update((f) => (f.screenshots_dir = d));
+  } else if (b.id === 'rfolder') {
+    const d = await ipc.pickFolder();
+    if (d) await update((f) => (f.recordings_dir = d));
   } else if (b.dataset.shortcut) {
     rebinding = b;
     render();
   } else if (b.id === 'config') await ipc.openConfig();
   else if (b.id === 'close') await ipc.closeWindow();
 });
+
+micSel.addEventListener('change', async () => {
+  const mic = micSel.value || null;
+  await update((f) => (f.mic = mic));
+});
+// Renders again once filled, so a configured mic shows selected; a failure must not stop this script.
+void ipc
+  .listMics()
+  .then((ms) => {
+    ms.forEach((m) => micSel.add(new Option(m.label, m.id)));
+    render();
+  })
+  .catch(() => {});
 
 addEventListener('keydown', async (e) => {
   if (!rebinding) return;

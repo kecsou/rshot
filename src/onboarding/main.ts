@@ -9,6 +9,7 @@ const rows: [string, string][] = [
   ['Capture area (with toolbar)', s.shortcuts.area],
   ['Capture screen', s.shortcuts.screen],
   ['Capture window', s.shortcuts.window],
+  ['Record screen', s.shortcuts.record],
 ];
 for (const [label, key] of rows) {
   const row = document.createElement('div');

@@ -157,6 +157,11 @@ fn main() {
             if !app.state::<AppState>().config.lock().unwrap().onboarded {
                 ui::open_onboarding(app.handle())?;
             }
+            let caught_up =
+                settings::catch_up_takeover(&mut app.state::<AppState>().config.lock().unwrap());
+            if let Err(e) = caught_up {
+                pipeline::notify(app.handle(), &e);
+            }
             dispatch(app.handle(), cmd);
             Ok(())
         })

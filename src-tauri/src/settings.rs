@@ -23,6 +23,9 @@ pub struct Settings {
     pub takeover_error: Option<String>,
     #[serde(default)]
     pub manual: Vec<(String, String)>,
+    pub recordings_dir: String,
+    pub mic: Option<String>,
+    pub fps: u8,
 }
 
 fn snapshot(app: &AppHandle, c: &store::Config, takeover_error: Option<String>) -> Settings {
@@ -36,6 +39,9 @@ fn snapshot(app: &AppHandle, c: &store::Config, takeover_error: Option<String>) 
         shortcuts: c.shortcuts.clone(),
         takeover_error,
         manual: shortcuts::manual_commands(c),
+        recordings_dir: store::recordings_dir(c).display().to_string(),
+        mic: c.mic.clone(),
+        fps: c.fps,
     }
 }
 
@@ -62,6 +68,17 @@ fn take_over_or_roll_back(c: &mut store::Config) -> Result<(), String> {
     }
 }
 
+/// Called at startup: a takeover saved by an older rshot also takes the keys added since (the
+/// record key), so a user who took over before them doesn't keep GNOME's recorder on it.
+pub fn catch_up_takeover(c: &mut store::Config) -> Result<(), String> {
+    if !shortcuts::outdated(c) {
+        return Ok(());
+    }
+    let taken = take_over_or_roll_back(c);
+    let saved = store::save_config(c).map_err(err);
+    taken.and(saved)
+}
+
 #[tauri::command]
 pub fn get_settings(app: AppHandle, state: State<'_, AppState>) -> Settings {
     snapshot(&app, &state.config.lock().unwrap(), None)
@@ -84,7 +101,12 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
             error = Some(format!("Launch at login: {e}"));
         }
     }
-    c.screenshots_dir = store::dir_setting(&settings.screenshots_dir);
+    c.screenshots_dir =
+        store::dir_setting(&settings.screenshots_dir, &store::default_screenshots_dir());
+    c.recordings_dir =
+        store::dir_setting(&settings.recordings_dir, &store::default_recordings_dir());
+    c.mic = settings.mic;
+    c.fps = if settings.fps == 60 { 60 } else { 30 };
     c.clipboard_mode = settings.clipboard_mode;
     c.show_thumbnail = settings.show_thumbnail;
     c.shutter_sound = settings.shutter_sound;

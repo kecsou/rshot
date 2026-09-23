@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "onboarding",
+  "description": "First-run dialog",
+  "windows": ["onboarding"],
+  "permissions": ["allow-get-settings", "allow-onboarding-choice", "allow-close-window"]
+}

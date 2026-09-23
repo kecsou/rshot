@@ -13,6 +13,7 @@
           <div class="box">
             <div class="row"><span class="l">Launch at login</span><button class="switch" role="switch" data-key="launch_at_login" aria-label="Launch at login"></button></div>
             <div class="row"><span class="l">Screenshots folder</span><button class="fld" id="folder"><svg class="ic" aria-hidden="true"><use href="#i-folder" /></svg><span></span></button></div>
+            <div class="row"><span class="l">Recordings folder</span><button class="fld" id="rfolder"><svg class="ic" aria-hidden="true"><use href="#i-folder" /></svg><span></span></button></div>
           </div>
         </section>
         <section>
@@ -37,6 +38,14 @@
             <div class="row"><span class="l">Capture area</span><button class="keys" data-shortcut="area"></button></div>
             <div class="row"><span class="l">Capture screen</span><button class="keys" data-shortcut="screen"></button></div>
             <div class="row"><span class="l">Capture window</span><button class="keys" data-shortcut="window"></button></div>
+            <div class="row"><span class="l">Record screen</span><button class="keys" data-shortcut="record"></button></div>
+          </div>
+        </section>
+        <section>
+          <h5>Recording</h5>
+          <div class="box">
+            <div class="row"><span class="l">Microphone</span><select class="fld" id="mic" aria-label="Microphone"><option value="">None</option></select></div>
+            <div class="row"><span class="l">Frame rate</span><div class="seg" id="fps"><button data-fps="30">30 fps</button><button data-fps="60">60 fps</button></div></div>
           </div>
         </section>
         <footer><span id="version"></span><button class="link" id="config">Open config file</button></footer>

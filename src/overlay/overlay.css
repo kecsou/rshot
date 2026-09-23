@@ -45,4 +45,6 @@ body[data-mode='window'], body[data-mode='screen'] { cursor: pointer; }
 #pop .field { width: 100%; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border-radius: 7px; background: var(--fill); border: 1px solid var(--fill); }
 #pop .field .grow { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 #pop .toggles { grid-column: 1; }
+#pop select.field { appearance: none; font: inherit; color: inherit; padding-right: 26px; background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center / 12px; }
+#pop select.field option { background: #232328; }
 #pop .tog { display: flex; align-items: center; justify-content: space-between; height: 26px; gap: 10px; }

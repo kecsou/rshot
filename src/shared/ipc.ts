@@ -9,6 +9,7 @@ export type OverlayOptions = {
   remember_selection: boolean;
   show_pointer: boolean;
   screenshots_dir: string;
+  mic: string | null;
 };
 export type OverlayInfo = {
   token: number;
@@ -55,7 +56,7 @@ export const countdownDone = () => invoke<void>('countdown_done');
 export const countdownCancel = () => invoke<void>('countdown_cancel');
 
 export type ClipboardMode = 'path-and-image' | 'path-only';
-export type Shortcuts = { area: string; screen: string; window: string };
+export type Shortcuts = { area: string; screen: string; window: string; record: string };
 export type Settings = {
   launch_at_login: boolean;
   screenshots_dir: string;
@@ -66,6 +67,9 @@ export type Settings = {
   shortcuts: Shortcuts;
   takeover_error: string | null;
   manual: [string, string][];
+  recordings_dir: string;
+  mic: string | null;
+  fps: number;
 };
 export type BoolSetting = 'launch_at_login' | 'show_thumbnail' | 'shutter_sound' | 'takeover';
 export const getSettings = () => invoke<Settings>('get_settings');

@@ -45,6 +45,8 @@ pub struct OverlayOptions {
     pub remember_selection: bool,
     pub show_pointer: bool,
     pub screenshots_dir: String,
+    /// The recording microphone (a PulseAudio/PipeWire source id); `None` records no sound.
+    pub mic: Option<String>,
 }
 
 impl OverlayOptions {
@@ -55,6 +57,7 @@ impl OverlayOptions {
             remember_selection: c.remember_selection,
             show_pointer: c.show_pointer,
             screenshots_dir: store::screenshots_dir(c).display().to_string(),
+            mic: c.mic.clone(),
         }
     }
 }
@@ -407,7 +410,9 @@ pub fn set_overlay_options(
     c.show_thumbnail = options.show_thumbnail;
     c.remember_selection = options.remember_selection;
     c.show_pointer = options.show_pointer;
-    c.screenshots_dir = store::dir_setting(&options.screenshots_dir);
+    c.screenshots_dir =
+        store::dir_setting(&options.screenshots_dir, &store::default_screenshots_dir());
+    c.mic = options.mic;
     store::save_config(&c).map_err(err)
 }
 

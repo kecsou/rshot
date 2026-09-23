@@ -1,19 +1,26 @@
-//! GNOME: clear the Shell screenshot keys and add custom keybindings that run rshot.
+//! GNOME: clear the Shell screenshot and screen-recording keys and add custom keybindings that
+//! run rshot.
 
 use super::gvariant::{format_strv, parse_strv, quote, to_gnome_accel, with_paths, without_paths};
 use crate::store::{self, Config};
 use std::{collections::BTreeMap, process::Command};
 
 const SHELL: &str = "org.gnome.shell.keybindings";
-/// Plan 3 adds "show-screen-recording-ui".
-const TAKEN_KEYS: [&str; 3] = ["show-screenshot-ui", "screenshot", "screenshot-window"];
+/// A takeover saved by an older rshot may lack keys added since: see `outdated`.
+const TAKEN_KEYS: [&str; 4] = [
+    "show-screenshot-ui",
+    "screenshot",
+    "screenshot-window",
+    "show-screen-recording-ui",
+];
 const MEDIA: &str = "org.gnome.settings-daemon.plugins.media-keys";
 const CUSTOM: &str = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
 const BASE: &str = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings";
-const OURS: [(&str, &str); 3] = [
+const OURS: [(&str, &str); 4] = [
     ("area", "capture area"),
     ("screen", "capture screen"),
     ("window", "capture window"),
+    ("record", "record"),
 ];
 
 /// `gsettings set` exits 0 even when dconf can't commit (e.g. no session bus): it only warns on
@@ -46,6 +53,16 @@ fn our_paths() -> Vec<String> {
     OURS.iter().map(|(id, _)| path(id)).collect()
 }
 
+/// Taken over, but by a version that didn't take every key this one does (e.g. the record key):
+/// `take_over` again takes the rest, backing up their originals first.
+pub fn outdated(cfg: &Config) -> bool {
+    let backup = cfg.gnome_backup.as_ref();
+    cfg.takeover
+        && TAKEN_KEYS
+            .iter()
+            .any(|k| !backup.is_some_and(|b| b.contains_key(*k)))
+}
+
 pub fn take_over(cfg: &mut Config, exe: &str) -> Result<(), String> {
     // Validate before touching anything.
     let s = &cfg.shortcuts;
@@ -53,6 +70,7 @@ pub fn take_over(cfg: &mut Config, exe: &str) -> Result<(), String> {
         to_gnome_accel(&s.area)?,
         to_gnome_accel(&s.screen)?,
         to_gnome_accel(&s.window)?,
+        to_gnome_accel(&s.record)?,
     ];
     // Per key, so keys added in later versions get backed up too; never overwrite an original.
     let backup = cfg.gnome_backup.get_or_insert_with(BTreeMap::new);
@@ -134,7 +152,30 @@ pub fn restore(cfg: &mut Config) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{gsettings_ok, put_back, Put};
+    use super::{gsettings_ok, outdated, put_back, Put, TAKEN_KEYS};
+    use crate::store::Config;
+
+    #[test]
+    fn a_takeover_missing_a_key_is_outdated() {
+        let with = |takeover: bool, keys: &[&str]| Config {
+            takeover,
+            gnome_backup: Some(
+                keys.iter()
+                    .map(|k| (k.to_string(), "['x']".into()))
+                    .collect(),
+            ),
+            ..Config::default()
+        };
+        // Plan 1's takeover backed up three keys; the record key is missing.
+        assert!(outdated(&with(true, &TAKEN_KEYS[..3])));
+        assert!(!outdated(&with(true, &TAKEN_KEYS)));
+        assert!(!outdated(&with(false, &TAKEN_KEYS[..3])));
+        assert!(outdated(&Config {
+            takeover: true,
+            ..Config::default()
+        }));
+        assert!(!outdated(&Config::default()));
+    }
 
     #[test]
     fn an_empty_original_is_reset_not_set() {

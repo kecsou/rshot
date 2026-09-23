@@ -142,7 +142,7 @@ pub fn screenshots_dir(c: &Config) -> PathBuf {
         .unwrap_or_else(default_screenshots_dir)
 }
 
-fn default_screenshots_dir() -> PathBuf {
+pub fn default_screenshots_dir() -> PathBuf {
     default_dir(dirs::picture_dir(), "Pictures", "Screenshots")
 }
 
@@ -150,7 +150,11 @@ pub fn recordings_dir(c: &Config) -> PathBuf {
     c.recordings_dir
         .as_deref()
         .and_then(absolute)
-        .unwrap_or_else(|| default_dir(dirs::video_dir(), "Videos", "Screencasts"))
+        .unwrap_or_else(default_recordings_dir)
+}
+
+pub fn default_recordings_dir() -> PathBuf {
+    default_dir(dirs::video_dir(), "Videos", "Screencasts")
 }
 
 /// `sub` in the XDG folder, else in `~/<home_sub>`.
@@ -168,9 +172,9 @@ fn absolute(p: &Path) -> Option<PathBuf> {
     }
 }
 
-/// A folder picked in the UI; `None` means "the default folder".
-pub fn dir_setting(chosen: &str) -> Option<PathBuf> {
-    absolute(Path::new(chosen)).filter(|p| *p != default_screenshots_dir())
+/// A folder picked in the UI; `None` means `default` (or a path that isn't absolute).
+pub fn dir_setting(chosen: &str, default: &Path) -> Option<PathBuf> {
+    absolute(Path::new(chosen)).filter(|p| p != default)
 }
 
 pub fn capture_stem(prefix: &str, t: NaiveDateTime) -> String {
@@ -391,9 +395,10 @@ mod tests {
         assert_eq!(with("Shots"), default);
         assert_eq!(with("./Shots"), default);
         assert_eq!(with(&abs.display().to_string()), abs);
-        assert_eq!(dir_setting("~/Shots"), Some(home.join("Shots")));
-        assert_eq!(dir_setting("Shots"), None);
-        assert_eq!(dir_setting(&abs.display().to_string()), Some(abs));
+        let set = |p: &str| dir_setting(p, &default);
+        assert_eq!(set("~/Shots"), Some(home.join("Shots")));
+        assert_eq!(set("Shots"), None);
+        assert_eq!(set(&abs.display().to_string()), Some(abs));
     }
 
     #[test]
@@ -466,9 +471,21 @@ mod tests {
     #[test]
     fn dir_setting_maps_the_default_folder_to_none() {
         let default = screenshots_dir(&Config::default());
-        assert_eq!(dir_setting(&default.display().to_string()), None);
+        assert_eq!(default, default_screenshots_dir());
+        assert_eq!(dir_setting(&default.display().to_string(), &default), None);
         // Absolute on every platform ("/data/shots" isn't on Windows).
         let abs = std::env::temp_dir().join("shots");
-        assert_eq!(dir_setting(&abs.display().to_string()), Some(abs));
+        assert_eq!(
+            dir_setting(&abs.display().to_string(), &default),
+            Some(abs.clone())
+        );
+        // The recordings default is the recordings folder's own, not the screenshots one.
+        let rec = recordings_dir(&Config::default());
+        assert_eq!(rec, default_recordings_dir());
+        assert_eq!(dir_setting(&rec.display().to_string(), &rec), None);
+        assert_eq!(
+            dir_setting(&default.display().to_string(), &rec),
+            Some(default)
+        );
     }
 }

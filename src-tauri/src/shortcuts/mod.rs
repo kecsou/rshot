@@ -29,6 +29,16 @@ pub fn restore(cfg: &mut Config) -> Result<(), String> {
     gnome::restore(cfg)
 }
 
+#[cfg(target_os = "linux")]
+pub fn outdated(cfg: &Config) -> bool {
+    gnome::outdated(cfg)
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn outdated(_cfg: &Config) -> bool {
+    false
+}
+
 #[cfg(not(target_os = "linux"))]
 pub fn take_over(_cfg: &mut Config) -> Result<(), String> {
     Err("Taking over the system shortcuts on this OS arrives in a later version.".into())
@@ -91,6 +101,7 @@ pub fn manual_commands(c: &Config) -> Vec<(String, String)> {
             c.shortcuts.window.clone(),
             command_for(&exe, "capture window"),
         ),
+        (c.shortcuts.record.clone(), command_for(&exe, "record")),
     ]
 }
 
