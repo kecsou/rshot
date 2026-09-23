@@ -139,16 +139,26 @@ fn recording_icon() -> tauri::image::Image<'static> {
     tauri::image::Image::new_owned(rgba, N, N)
 }
 
+/// Set while a Quit is saving the recording; that Quit carries on by itself afterwards.
+static QUITTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Open editors are asked to close first (each prompts for unsaved changes); Quit exits once
 /// none is left, so after that a second Quit does. A recording is stopped and saved first, off the
-/// main thread (ffmpeg would otherwise outlive rshot and record until the disk is full).
+/// main thread (ffmpeg would otherwise outlive rshot and record until the disk is full); a Quit
+/// repeated meanwhile is ignored, as exiting would cut the save short.
 fn quit(app: &AppHandle) {
+    use std::sync::atomic::Ordering;
+    if QUITTING.load(Ordering::Acquire) {
+        return;
+    }
     if crate::recorder::is_recording(app) {
+        QUITTING.store(true, Ordering::Release);
         let app = app.clone();
         std::thread::spawn(move || {
             if let Err(e) = crate::recorder::stop(&app) {
                 crate::pipeline::notify(&app, &e);
             }
+            QUITTING.store(false, Ordering::Release);
             quit(&app);
         });
         return;

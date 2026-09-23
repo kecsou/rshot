@@ -186,6 +186,7 @@ static GENERATION: AtomicU64 = AtomicU64::new(1);
 pub struct Recording {
     id: u64,
     child: Child,
+    ffmpeg: PathBuf,
     mkv: PathBuf,
     mp4: PathBuf,
     started: Instant,
@@ -247,34 +248,21 @@ pub fn start(app: &AppHandle, region: Region, full: bool) -> Result<(), String> 
         let mkv = store::raw_recording(&mp4);
         let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".into());
         let args = record_args(region, &display, cfg.fps, cfg.mic.as_deref(), &mkv)?;
-        let mut child = Command::new(&ffmpeg)
-            .args(&args)
+        let mut cmd = Command::new(&ffmpeg);
+        cmd.args(&args)
             .stdin(Stdio::piped())
-            .stdout(if cfg.mic.is_some() {
-                Stdio::piped()
-            } else {
-                Stdio::null()
-            })
-            .stderr(ffmpeg_log(false))
-            .spawn()
-            .map_err(|e| format!("ffmpeg: {e}"))?;
-        let level = child.stdout.take().map(|out| {
-            let level = Arc::new(AtomicU32::new(SILENCE_DB.to_bits()));
-            let l = level.clone();
-            // Ends at EOF, when ffmpeg exits.
-            std::thread::spawn(move || {
-                for line in BufReader::new(out).lines().map_while(Result::ok) {
-                    if let Some(db) = parse_level(&line) {
-                        l.store(db.to_bits(), Ordering::Relaxed);
-                    }
-                }
-            });
-            level
-        });
+            .stdout(Stdio::piped())
+            .stderr(ffmpeg_log(false));
+        let level = cfg
+            .mic
+            .is_some()
+            .then(|| Arc::new(AtomicU32::new(SILENCE_DB.to_bits())));
+        let child = spawn_tied(cmd, level.clone())?;
         let id = GENERATION.fetch_add(1, Ordering::Relaxed);
         *slot = Some(Recording {
             id,
             child,
+            ffmpeg,
             mkv,
             mp4,
             started: Instant::now(),
@@ -287,7 +275,49 @@ pub fn start(app: &AppHandle, region: Region, full: bool) -> Result<(), String> 
     if let Err(e) = ui::recording_started(app, region, full) {
         pipeline::notify(app, &e);
     }
+    // A stop that landed while the UI came up reset it before we set it: reset it again. (A newer
+    // recording in the slot shows the same "recording" UI, so it's left alone.)
+    if !is_recording(app) {
+        ui::recording_stopped(app);
+    }
     Ok(())
+}
+
+/// Spawns ffmpeg from a thread that lives exactly as long as ffmpeg (it drains ffmpeg's stdout to
+/// EOF, feeding `level` when set). On Linux, ffmpeg gets SIGTERM when that thread ends, which
+/// includes rshot dying: a killed rshot must not leave the screen being recorded. (The parent
+/// death signal is per thread, so it can't come from a short-lived caller thread.) When rshot is
+/// killed outright, the kernel re-sends the signal each time ffmpeg is reparented to a still-dying
+/// thread, so ffmpeg hard-exits (> 3 signals): the MKV keeps what was flushed, as after a crash.
+fn spawn_tied(mut cmd: Command, level: Option<Arc<AtomicU32>>) -> Result<Child, String> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::process::CommandExt;
+        // SAFETY: prctl is async-signal-safe, as pre_exec requires.
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                Ok(())
+            });
+        }
+    }
+    let (tx, rx) = std::sync::mpsc::sync_channel(0);
+    std::thread::spawn(move || {
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => return drop(tx.send(Err(format!("ffmpeg: {e}")))),
+        };
+        let out = child.stdout.take().expect("stdout is piped");
+        if tx.send(Ok(child)).is_err() {
+            return;
+        }
+        for line in BufReader::new(out).lines().map_while(Result::ok) {
+            if let (Some(level), Some(db)) = (&level, parse_level(&line)) {
+                level.store(db.to_bits(), Ordering::Relaxed);
+            }
+        }
+    });
+    rx.recv().map_err(err)?
 }
 
 /// Ticks the tray timer; if ffmpeg dies on its own, keeps the MKV and tells the user.
@@ -341,23 +371,28 @@ fn end(rec: &mut Recording) {
     let _ = rec.child.wait();
 }
 
-/// Ends the recording and turns it into the MP4. Blocks for up to ~10 s: not on the main thread.
+/// Ends the recording and turns it into the MP4 (written atomically: a hidden `.part.mp4`, then
+/// renamed; the MKV, which reserves the name, goes last). Nothing to do when none is running, e.g.
+/// the watchdog already ended it. Blocks for up to ~10 s: not on the main thread.
 pub fn stop(app: &AppHandle) -> Result<(), String> {
-    let mut rec = take(app).ok_or("Not recording")?;
+    let Some(mut rec) = take(app) else {
+        return Ok(());
+    };
     end(&mut rec);
-    let ffmpeg = ffmpeg_path().ok_or("ffmpeg isn't available")?;
-    let ok = Command::new(ffmpeg)
-        .args(remux_args(&rec.mkv, &rec.mp4))
+    let part = rec.mkv.with_extension("part.mp4");
+    let remuxed = Command::new(&rec.ffmpeg)
+        .args(remux_args(&rec.mkv, &part))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(ffmpeg_log(true))
         .status()
-        .map_err(err)?
-        .success();
-    if !ok {
-        let _ = std::fs::remove_file(&rec.mp4); // a partial MP4 would pass for a good one
+        .map_err(err)
+        .and_then(|s| s.success().then_some(()).ok_or(s.to_string()))
+        .and_then(|()| std::fs::rename(&part, &rec.mp4).map_err(err));
+    if let Err(e) = remuxed {
+        let _ = std::fs::remove_file(&part);
         return Err(format!(
-            "Couldn't finish the recording. {}",
+            "Couldn't finish the recording ({e}). {}",
             leftovers(&rec.mkv)
         ));
     }

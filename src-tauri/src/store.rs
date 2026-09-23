@@ -406,10 +406,15 @@ mod tests {
         let p = d.join("config.toml");
         fs::write(
             &p,
-            "[shortcuts]\narea = \"Print\"\nscreen = \"Shift+Print\"\nwindow = \"Alt+Print\"\n",
+            "[shortcuts]\narea = \"F1\"\nscreen = \"Shift+Print\"\nwindow = \"Alt+Print\"\n",
         )
         .unwrap();
-        assert_eq!(load_config_from(&p).shortcuts.record, "Ctrl+Alt+Shift+R");
+        // A config from before `record` existed keeps its values (it isn't moved aside as invalid).
+        let old = load_config_from(&p).shortcuts;
+        assert_eq!(
+            (old.area.as_str(), old.record.as_str()),
+            ("F1", "Ctrl+Alt+Shift+R")
+        );
         fs::remove_dir_all(&d).unwrap();
         assert!(recordings_dir(&c).ends_with("Screencasts"));
     }

@@ -208,7 +208,15 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
         CaptureWindow => pipeline::capture_window_now(app),
         Record => {
             if recorder::is_recording(app) {
-                recorder::stop(app)
+                // Off this handler (the CLI waits on it), like the tray. Stopping is a no-op if the
+                // watchdog ended the recording meanwhile; it has already told the user.
+                let app = app.clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = recorder::stop(&app) {
+                        pipeline::notify(&app, &e);
+                    }
+                });
+                Ok(())
             } else {
                 // Task 3 replaces this with overlay::start(app, "recarea").
                 let pos = app.cursor_position().map_err(err);

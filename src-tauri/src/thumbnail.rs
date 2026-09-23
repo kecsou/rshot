@@ -66,6 +66,10 @@ pub fn thumbnail_info(state: State<'_, AppState>) -> Option<Thumb> {
 pub async fn read_capture(app: AppHandle, path: String) -> Result<Response, String> {
     let state = app.state::<AppState>();
     let (_, canon) = guard(&state, &path)?;
+    // Pages draw PNGs from these bytes; a recording (possibly GBs) never crosses IPC.
+    if !is_png(&canon) {
+        return Err("not an image".into());
+    }
     std::fs::read(canon).map(Response::new).map_err(err)
 }
 
