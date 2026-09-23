@@ -88,9 +88,9 @@ fn runnable(p: &Path) -> bool {
 #[cfg(target_os = "linux")]
 pub const NO_FFMPEG: &str =
     "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or install ffmpeg (sudo apt install ffmpeg).";
+// Not Homebrew's: an app started from Finder or at login doesn't have it on its PATH.
 #[cfg(target_os = "macos")]
-pub const NO_FFMPEG: &str =
-    "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or install ffmpeg (brew install ffmpeg).";
+pub const NO_FFMPEG: &str = "Recording needs ffmpeg, which wasn't found. Reinstall rshot.";
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub const NO_FFMPEG: &str =
     "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or put ffmpeg.exe on your PATH.";

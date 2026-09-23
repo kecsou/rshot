@@ -1,11 +1,15 @@
 {
   "bundle": {
-    "targets": ["deb", "rpm", "appimage"],
+    "targets": ["nsis"],
     "externalBin": ["binaries/rshot-ffmpeg"],
     "resources": {
       "../THIRD_PARTY.md": "THIRD_PARTY.md",
       "../FFMPEG-NOTICES.txt": "FFMPEG-NOTICES.txt",
       "binaries/FFMPEG-LICENSE.txt": "FFMPEG-LICENSE.txt"
+    },
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": { "installMode": "currentUser", "installerHooks": "windows/hooks.nsh" }
     }
   }
 }

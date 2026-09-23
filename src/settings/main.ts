@@ -45,9 +45,13 @@ function render() {
   const err = document.querySelector<HTMLElement>('#err')!;
   err.hidden = !s.takeover_error;
   if (s.takeover_error) {
+    // Windows and macOS have no settings page that binds a key to a command.
     err.innerHTML =
-      `<p>${esc(s.takeover_error)}</p><p>Bind these yourself in your desktop's keyboard settings:</p>` +
-      s.manual.map(([k, c]) => `<div><kbd>${esc(k)}</kbd><code>${esc(c)}</code></div>`).join('');
+      `<p>${esc(s.takeover_error)}</p>` +
+      (s.platform === 'linux'
+        ? `<p>Bind these yourself in your desktop's keyboard settings:</p>` +
+          s.manual.map(([k, c]) => `<div><kbd>${esc(k)}</kbd><code>${esc(c)}</code></div>`).join('')
+        : '<p>The tray menu still captures and records. Turn this on again to retry.</p>');
   }
 }
 

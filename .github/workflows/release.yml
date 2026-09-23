@@ -1,0 +1,100 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  # One draft release for every build job to upload into (tag pushes only; manual runs keep the
+  # installers as workflow artifacts). It also carries the source of the bundled GPL ffmpeg builds
+  # and the notices of the libraries inside them.
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: FFmpeg and x264 source, and the build scripts that pin every other library
+        if: github.ref_type == 'tag'
+        run: |
+          mkdir sources && cd sources
+          get() { curl --retry 3 -fsSL -o "$1" "$2"; }
+          # Linux and Windows builds (BtbN, autobuild-2026-08-31-13-27)
+          get ffmpeg-n8.1.2-50-g1a748fe2cd.tar.gz https://github.com/FFmpeg/FFmpeg/archive/1a748fe2cd43e3ead22fafb1b5b7d77f153898a8.tar.gz
+          get FFmpeg-Builds-8267213e.tar.gz https://github.com/BtbN/FFmpeg-Builds/archive/8267213e26c1031621e6e1210fe3aa4867214f6a.tar.gz
+          # macOS builds (Martin Riedl, 9.0.2)
+          get ffmpeg-9.0.2.tar.xz https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+          echo "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e  ffmpeg-9.0.2.tar.xz" | sha256sum -c
+          get martin-riedl-build-script-6a611e19.tar.gz https://git.martin-riedl.de/ffmpeg/build-script/archive/6a611e19870e197bc37c6e4c7fccddebd3715466.tar.gz
+          # x264, the same commit in every build
+          get x264-0480cb05.tar.gz https://code.videolan.org/videolan/x264/-/archive/0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee/x264-0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee.tar.gz
+      - id: release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: rshot ${{ github.ref_name }}
+          files: |
+            sources/*
+            THIRD_PARTY.md
+            FFMPEG-NOTICES.txt
+
+  build:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04: the oldest glibc the .deb/.rpm/AppImage should run on.
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          # One universal .dmg; fetch-ffmpeg.sh lipo's the two ffmpeg builds.
+          - os: macos-14
+            target: universal-apple-darwin
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - name: Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev libpipewire-0.3-dev libspa-0.2-dev clang libclang-dev libgbm-dev libdrm-dev \
+            libwayland-dev libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xfixes0-dev patchelf \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
+      - name: Bundled ffmpeg sidecar
+        shell: bash
+        env: { TARGET: '${{ matrix.target }}' }
+        run: scripts/fetch-ffmpeg.sh
+      - run: npm ci
+      - name: Build installers
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: --target ${{ matrix.target }}
+          releaseId: ${{ needs.create-release.outputs.id }}
+      - name: Upload installers (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rshot-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg

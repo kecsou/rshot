@@ -61,10 +61,13 @@ yes.addEventListener('click', async () => {
   } catch (e) {
     yes.textContent = 'Close';
     yes.onclick = () => void ipc.closeWindow();
-    const manual = (await ipc.getSettings()).manual;
-    keys.hidden = true; // the error lists the keys with their commands
+    // Windows and macOS have no settings page that binds a key to a command.
+    const manual = s.platform === 'linux' ? (await ipc.getSettings()).manual : [];
+    keys.hidden = true; // on Linux the error lists the keys with their commands
     err.hidden = false;
-    err.textContent = `Couldn't take over the shortcuts: ${String(e)}. Bind these yourself:`;
+    err.textContent = `Couldn't take over the shortcuts: ${String(e)}. ${
+      manual.length ? 'Bind these yourself:' : 'The tray menu still captures and records; retry from Settings.'
+    }`;
     for (const [k, c] of manual) {
       const code = document.createElement('code');
       code.textContent = `${k} → ${c}`;
