@@ -118,12 +118,16 @@ fn idle_icon(app: &AppHandle) -> tauri::image::Image<'_> {
 }
 
 /// `■ m:ss` next to the tray icon, and in its tooltip (Windows shows no title); `None` removes it.
+/// Linux's indicator has no tooltip: setting one each second would only cost a main-thread hop.
 pub fn set_tray_timer(app: &AppHandle, secs: Option<u64>) {
     if let Some(tray) = app.tray_by_id(TRAY) {
         let time = secs.map(|s| format!("{}:{:02}", s / 60, s % 60));
         let _ = tray.set_title(time.as_ref().map(|t| format!("■ {t}")));
-        let tip = time.map_or_else(|| "rshot".into(), |t| format!("rshot — recording {t}"));
-        let _ = tray.set_tooltip(Some(tip));
+        #[cfg(not(target_os = "linux"))]
+        {
+            let tip = time.map_or_else(|| "rshot".into(), |t| format!("rshot — recording {t}"));
+            let _ = tray.set_tooltip(Some(tip));
+        }
     }
 }
 

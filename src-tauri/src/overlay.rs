@@ -46,7 +46,7 @@ pub struct OverlayOptions {
     pub show_pointer: bool,
     pub screenshots_dir: String,
     /// The recording microphone (`Mic::id`: a PulseAudio/PipeWire source, a DirectShow device name,
-    /// an AVFoundation audio device index); `None` records no sound.
+    /// an AVFoundation device name); `None` records no sound.
     pub mic: Option<String>,
 }
 

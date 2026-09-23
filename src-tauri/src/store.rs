@@ -74,8 +74,8 @@ pub struct Config {
     /// hotkeys), kept while rshot owns them.
     pub gnome_backup: Option<BTreeMap<String, String>>,
     pub recordings_dir: Option<PathBuf>,
-    /// PulseAudio/PipeWire source id (Windows: DirectShow device name, macOS: AVFoundation audio
-    /// device index); `None` records no sound.
+    /// PulseAudio/PipeWire source id (Windows: DirectShow device name, macOS: AVFoundation device
+    /// name); `None` records no sound.
     pub mic: Option<String>,
     pub fps: u8,
 }

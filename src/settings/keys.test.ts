@@ -30,7 +30,7 @@ describe('comboFrom', () => {
     expect(comboFrom(ev('ControlLeft', 'Control', { ctrlKey: true }))).toBeNull();
     expect(comboFrom(ev('Numpad1', '1', { ctrlKey: true }))).toBeNull();
   });
-  it('records letters and digits as the layout labels them', () => {
+  it('records letters as the layout labels them, digits by their key', () => {
     expect(comboFrom(ev('KeyQ', 'a', { ctrlKey: true, altKey: true }))).toBe('Ctrl+Alt+A'); // AZERTY A
     expect(comboFrom(ev('Semicolon', 'm', { ctrlKey: true }))).toBe('Ctrl+M'); // AZERTY M
     expect(comboFrom(ev('KeyY', 'z', { ctrlKey: true }))).toBe('Ctrl+Z'); // QWERTZ Z
@@ -38,5 +38,8 @@ describe('comboFrom', () => {
     expect(comboFrom(ev('Digit1', '&', { ctrlKey: true }))).toBe('Ctrl+1'); // AZERTY digit row
     expect(comboFrom(ev('KeyZ', 'я', { ctrlKey: true }))).toBe('Ctrl+Z'); // Cyrillic
     expect(comboFrom(ev('KeyA', 'å', { altKey: true }))).toBe('Alt+A'); // macOS Option
+    // A digit typed elsewhere is not the key's: its own digit, or nothing for a numpad key.
+    expect(comboFrom(ev('Digit3', '1', { ctrlKey: true, shiftKey: true }))).toBe('Ctrl+Shift+3');
+    expect(comboFrom(ev('KeyQ', '1', { ctrlKey: true }))).toBe('Ctrl+Q');
   });
 });

@@ -40,11 +40,13 @@ function permissionStep() {
 }
 document.querySelector('#open')!.addEventListener('click', () => void ipc.requestScreenPermission());
 document.querySelector('#done')!.addEventListener('click', () => void ipc.closeWindow());
+/** After either choice: every capture, the tray's included, needs the permission on macOS. */
+const next = () => (s.platform === 'macos' && !s.screen_permission ? permissionStep() : ipc.closeWindow());
 
 document.querySelector('#no')!.addEventListener('click', async () => {
   try {
     await ipc.onboardingChoice(false);
-    await ipc.closeWindow();
+    await next();
   } catch (e) {
     err.hidden = false;
     err.textContent = `Couldn't save your choice: ${String(e)}`;
@@ -56,8 +58,7 @@ const yes = document.querySelector<HTMLButtonElement>('#yes')!;
 yes.addEventListener('click', async () => {
   try {
     await ipc.onboardingChoice(true);
-    if (s.platform === 'macos' && !s.screen_permission) permissionStep();
-    else await ipc.closeWindow();
+    await next();
   } catch (e) {
     yes.textContent = 'Close';
     yes.onclick = () => void ipc.closeWindow();
