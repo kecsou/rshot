@@ -29,6 +29,7 @@
 - Settings: microphone (None or a PulseAudio/PipeWire source), frame rate 30/60, recordings folder, and a "Record screen" shortcut (default `Ctrl+Alt+Shift+R`, taken over from GNOME `show-screen-recording-ui`).
 - Sidecar name: `rshot-ffmpeg`, never `ffmpeg`. The `.deb` installs it at `/usr/bin/rshot-ffmpeg` without clashing with the distro `ffmpeg`. It's fetched by `scripts/fetch-ffmpeg.sh`, never committed. `THIRD_PARTY.md` carries the GPL notice and source link.
 - The mic level meter from mockup 4a is **not** built. The pill shows a mic icon when the mic is on.
+- **Webview hardening (from Task 0 on):** every new `#[tauri::command]` must be listed in `build.rs`'s `AppManifest::commands` **and** granted in the capability file of each window label that calls it (`src-tauri/capabilities/*.json`). An ungranted command fails at runtime with a permission error. The CSP from Task 0 stays on; media and images from files use the asset protocol, granted per file.
 
 ## File Map
 
@@ -51,6 +52,73 @@ src/video/{index.html,video.css,main.ts,trim.ts,trim.test.ts}
 src/overlay/{index.html,main.ts,options.ts}  # record modes, mic picker
 src/thumbnail/main.ts, src/settings/*   # video thumbnail; recording group
 THIRD_PARTY.md
+```
+
+---
+
+### Task 0: Webview hardening — CSP and per-window command allow-lists (Plan 1 final-review ruling)
+
+**Files:**
+- Modify: `src-tauri/tauri.conf.json` (`app.security.csp`, `devCsp`), `src-tauri/build.rs` (`AppManifest`), `src-tauri/capabilities/default.json`
+- Create: `src-tauri/capabilities/{overlay,countdown,thumbnail,dialogs,editor}.json`
+
+**Interfaces:** none (configuration). Afterwards, each window can call only the app commands its page uses.
+
+- [ ] **Step 1: CSP.** In `tauri.conf.json`, replace `"csp": null` with:
+
+```json
+"csp": {
+  "default-src": "'self'",
+  "script-src": "'self'",
+  "style-src": "'self' 'unsafe-inline'",
+  "font-src": "'self' data:",
+  "img-src": "'self' blob: data: asset: http://asset.localhost",
+  "media-src": "'self' blob: asset: http://asset.localhost",
+  "connect-src": "'self' ipc: http://ipc.localhost"
+},
+"devCsp": null
+```
+
+(`devCsp: null` keeps Vite's HMR working in `tauri dev`. The CSP is verified in a release build, in Step 4.)
+
+- [ ] **Step 2: Declare the app commands.** In `build.rs`:
+
+```rust
+fn main() {
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
+        "overlay_info", "overlay_frame", "overlay_ready", "overlay_activate", "overlay_cancel", "overlay_capture",
+        "set_overlay_options", "pick_folder", "countdown_info", "countdown_done", "countdown_cancel",
+        "thumbnail_info", "read_capture", "reveal_capture", "delete_capture", "retry_copy", "dismiss_thumbnail",
+        "get_settings", "set_settings", "onboarding_choice", "open_config", "close_window",
+        "open_editor", "editor_info", "save_image", "editor_delete", "copy_path",
+    ])))
+    .expect("failed to run tauri-build");
+}
+```
+
+Keep any existing build.rs logic, such as the msvc test-manifest lines from the Plan 1 fix wave. Match the list to the commands actually registered in `main.rs`'s `generate_handler!`, adding or removing names as needed.
+
+- [ ] **Step 3: Split the capabilities by window.**
+  - `default.json` keeps `"windows": ["*"]` with only `core:default` and `core:window:allow-start-dragging`, and **no** app commands.
+  - One file per window-label pattern grants only what that page calls. Look up the exact permission identifiers Tauri generates for app commands in `src-tauri/gen/schemas/desktop-schema.json` after a build; they're typically `allow-<command-name>`.
+    - `overlay.json`, `["overlay-*"]`: overlay_info, overlay_frame, overlay_ready, overlay_activate, overlay_cancel, overlay_capture, set_overlay_options, pick_folder.
+    - `countdown.json`, `["countdown-*"]`: countdown_info, countdown_done, countdown_cancel.
+    - `thumbnail.json`, `["thumbnail-*"]`: thumbnail_info, read_capture, reveal_capture, delete_capture, retry_copy, dismiss_thumbnail, open_editor, plus `drag:default` (drag leaves `default.json`).
+    - `dialogs.json`, `["settings", "onboarding"]`: get_settings, set_settings, onboarding_choice, open_config, close_window, pick_folder.
+    - `editor.json`, `["editor-*"]`: editor_info, read_capture, save_image, retry_copy, editor_delete, copy_path, reveal_capture, close_window.
+
+- [ ] **Step 4: Verify.**
+  - Run `npm run build && (cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo test) && scripts/cross-check.sh`.
+  - Then run a release build (`npm run tauri build -- --no-bundle`) and run `src-tauri/target/release/rshot` in the background. Exercise every window: Print → overlay (drag, Options, folder picker, timer countdown), thumbnail (edit, reveal, delete, drag), Settings, onboarding (temporarily move `config.toml` aside), editor (draw, Done).
+  - Nothing may log a CSP violation or a "not allowed" permission error. Check the daemon's stderr, and the WebKit console by temporarily running a debug build with `devCsp` set to the same CSP if needed.
+  - Restore the desktop and config exactly as found.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src-tauri && git commit -m "security: CSP and per-window command allow-lists for every webview
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -691,7 +759,8 @@ In `main.rs`:
                 let pos = app.cursor_position().map_err(err);
                 pos.and_then(|p| {
                     let frames = capture::grab_all(false)?;
-                    let f = &frames[capture::frame_at(&frames, p.x as i32, p.y as i32)];
+                    let i = capture::frame_at(&frames, p.x as i32, p.y as i32);
+                    let f = frames.into_iter().nth(i).ok_or("no monitor found")?; // never index: zero monitors must not panic
                     recorder::start(app, recorder::Region { x: f.x, y: f.y, w: f.image.width(), h: f.image.height() }, true)
                 })
             }
@@ -724,6 +793,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ---
 
 ### Task 3: Recording UI — overlay record modes, countdown, frame and pill
+
+> Note: since this plan was written, `src/overlay/main.ts` gained a mode broadcast (`emit('overlay:mode', m)` in `setMode`, plus a listener), a `hides` counter guard in `load()`, and `busy = false` in `capture()`'s catch. Keep all of them. `recarea`/`recscreen` go through the same broadcast. The new commands (`overlay_record`, `recording_info`, `recording_stop`, `recording_discard`) must be added to `build.rs` and to `capabilities/overlay.json` (`overlay_record`) and a new `capabilities/pill.json` (`["pill-*"]`: `recording_info`, `recording_stop`, `recording_discard`), as Task 0 requires.
 
 **Files:**
 - Create: `src/recframe/index.html`, `src/pill/index.html`, `src/pill/main.ts`
@@ -1079,26 +1150,10 @@ Run: `npm test -- src/video`. The tests pass; the helpers are simple enough that
 - [ ] **Step 2: Asset protocol, page routing, `trim_video`**
 
 - `cargo add tauri@2.11 --features tray-icon,macos-private-api,protocol-asset` (keeps the existing features and adds `protocol-asset`).
-- In `tauri.conf.json`, set `app.security` to:
-
-  ```json
-  "security": { "csp": null, "assetProtocol": { "enable": true, "scope": ["$PICTURE/**", "$VIDEO/**"] } }
-  ```
-
-- In `main.rs` `setup`, allow custom folders too:
-
-  ```rust
-  {
-      let c = app.state::<AppState>().config.lock().unwrap().clone();
-      let scope = app.asset_protocol_scope();
-      let _ = scope.allow_directory(store::screenshots_dir(&c), true);
-      let _ = scope.allow_directory(store::recordings_dir(&c), true);
-  }
-  ```
-
-  Then make the same two `allow_directory` calls at the end of `settings::set_settings`, after saving.
+- In `tauri.conf.json`, enable the asset protocol with an **empty** static scope, keeping the CSP from Task 0: add `"assetProtocol": { "enable": true, "scope": [] }` inside `app.security`.
+- Security ruling (Plan 1 final review): **never** scope whole folders. A webview can change the screenshots folder, and the path guard was deliberately narrowed to the last capture. Grant one file at a time instead: in `pipeline::finish_video`, call `app.asset_protocol_scope().allow_file(path)` before showing the thumbnail. In `ui::open_editor`, call it for the file being opened when it is an `.mp4`.
 - In `ui::open_editor`, pick the page by extension: `let page = if path.extension().is_some_and(|e| e == "mp4") { "video/index.html" } else { "editor/index.html" };`, and use `page` in `WebviewUrl::App(page.into())`.
-- Make the thumbnail's path guard accept the recordings folder too. In `thumbnail::guard`, compute `let vdir = store::recordings_dir(&cfg).canonicalize().ok();` and accept `p` if it `starts_with` either folder. (Read the config once into `cfg`.)
+- Leave `thumbnail::guard` **unchanged**. `finish_video` sets `last_capture`, and Plan 2 extended the guard to files open in an editor. Widening it to folders would reopen the hole closed in Plan 1 Task 9.
 - In `editor.rs`, add:
 
 ```rust
@@ -1496,23 +1551,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Rust**
 
-- `gnome.rs`:
+- `gnome.rs` (the per-key backup and up-front accelerator validation already exist from Plan 1):
   - `TAKEN_KEYS` becomes `["show-screenshot-ui", "screenshot", "screenshot-window", "show-screen-recording-ui"]`.
   - `OURS` gains `("record", "record")`.
-  - The accelerator match gains `"record" => &cfg.shortcuts.record,`.
-  - Backup must now fill in **missing** keys, so users who took over before this plan keep their original record binding:
-
-```rust
-    let backup = cfg.gnome_backup.get_or_insert_with(BTreeMap::new);
-    for k in TAKEN_KEYS {
-        if !backup.contains_key(k) {
-            backup.insert(k.to_string(), gs(&["get", SHELL, k])?);
-        }
-    }
-```
-
-  (This replaces the old `if cfg.gnome_backup.is_none() { … }` block.)
-- `shortcuts::manual_commands` gains `(c.shortcuts.record.clone(), format!("\"{exe}\" record"))`.
+  - Add `cfg.shortcuts.record` to the array of accelerators that is validated with `to_gnome_accel` and zipped with `OURS`.
+  - Per-key backup means users who took over before this plan get the new key backed up automatically.
+- `shortcuts::manual_commands` gains `(c.shortcuts.record.clone(), command_for(&exe, "record"))`, going through the shared Exec-safe helper.
 - `settings::Settings` gains `pub recordings_dir: String, pub mic: Option<String>, pub fps: u8`:
   - `snapshot` fills them in (`store::recordings_dir(c).display().to_string()`, `c.mic.clone()`, `c.fps`).
   - `set_settings` applies them (`c.recordings_dir = dir_setting_for(...)`; see below; `c.mic = settings.mic.clone(); c.fps = if settings.fps == 60 { 60 } else { 30 };`).

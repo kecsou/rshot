@@ -101,8 +101,9 @@ fn editor_path(state: &AppState, window: &WebviewWindow) -> Result<PathBuf, Stri
     state.editors.lock().unwrap().get(window.label()).cloned().ok_or_else(|| "not an editor window".to_string())
 }
 
+/// async: building a window from a sync command deadlocks on Windows (WebView2).
 #[tauri::command]
-pub fn open_editor(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<(), String> {
+pub async fn open_editor(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<(), String> {
     let p = thumbnail::guard(&state, &path)?;
     ui::close_prefix(&app, "thumbnail");
     ui::open_editor(&app, &p)
@@ -120,8 +121,9 @@ pub fn editor_info(window: WebviewWindow, state: State<'_, AppState>) -> Result<
 
 /// Body = the flattened PNG. Overwrites the capture atomically and re-copies the clipboard,
 /// so the path the user already pasted keeps pointing at what they see.
+/// async: writes up to ~16 MB and waits on the clipboard thread — keep it off the GTK main thread.
 #[tauri::command]
-pub fn save_image(window: WebviewWindow, state: State<'_, AppState>, request: Request<'_>) -> Result<(), String> {
+pub async fn save_image(window: WebviewWindow, state: State<'_, AppState>, request: Request<'_>) -> Result<(), String> {
     let InvokeBody::Raw(png) = request.body() else {
         return Err("expected PNG bytes".into());
     };
@@ -136,6 +138,13 @@ pub fn editor_delete(window: WebviewWindow, state: State<'_, AppState>) -> Resul
     let p = editor_path(&state, &window)?;
     std::fs::remove_file(&p).map_err(err)?;
     state.editors.lock().unwrap().remove(window.label());
+    // Don't leave the tray / thumbnail pointing at a deleted file (Plan 1 final review).
+    let mut last = state.last_capture.lock().unwrap();
+    if last.as_ref().and_then(|l| l.canonicalize().ok()).is_none() {
+        *last = None;
+        state.thumb.lock().unwrap().take();
+    }
+    drop(last);
     window.destroy().map_err(err)
 }
 
@@ -186,7 +195,11 @@ pub fn open_editor(app: &AppHandle, path: &std::path::Path) -> Result<(), String
     let y = m.position().y + ((m.size().height as f64 - h * s) / 2.0) as i32;
     win.set_position(PhysicalPosition::new(x, y)).map_err(err)?;
     win.show().map_err(err)?;
-    win.set_focus().map_err(err)
+    win.set_focus().map_err(err)?;
+    // Mutter ignores set_focus for windows opened from another app's click (Plan 1 Task 6/13).
+    #[cfg(target_os = "linux")]
+    force_focus(&win);
+    Ok(())
 }
 ```
 
@@ -409,6 +422,7 @@ footer { height: 40px; flex-shrink: 0; background: var(--surface-2); border-top:
 `src/editor/main.ts` (minimal: shows the capture, and Done re-saves it unchanged; Task 4 replaces it):
 
 ```ts
+import '../shared/base';
 import '../shared/glass.css';
 import './editor.css';
 import { mountIcons } from '../shared/icons';
@@ -1358,6 +1372,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Replace `src/editor/main.ts`**
 
 ```ts
+import '../shared/base';
 import '../shared/glass.css';
 import './editor.css';
 import { getCurrentWindow } from '@tauri-apps/api/window';

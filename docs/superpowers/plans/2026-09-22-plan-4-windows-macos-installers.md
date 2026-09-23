@@ -644,7 +644,7 @@ pub fn request_screen_permission() {
 In `settings.rs`:
 - `Settings` gains `#[serde(default)] pub platform: String` and `#[serde(default)] pub screen_permission: bool`.
 - `snapshot` fills them in (`std::env::consts::OS.to_string()`, `capture::screen_permission()`).
-- Add the command `#[tauri::command] pub fn request_screen_permission() { crate::capture::request_screen_permission(); }` and register it.
+- Add the command `#[tauri::command] pub fn request_screen_permission() { crate::capture::request_screen_permission(); }` and register it. Also add it to `build.rs`'s `AppManifest` and to `capabilities/dialogs.json` (webview hardening from Plan 3 Task 0).
 
 `ipc.ts`:
 - `Settings` gains `platform: string; screen_permission: boolean`.
