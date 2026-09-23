@@ -20,7 +20,7 @@ pub fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-/// Lock order: session → config; last_capture → thumb; `editors` and `recording` are never held with another lock; never hold a mutex across a Tauri call that needs the main thread.
+/// Lock order: session → config; last_capture → thumb; `editors`, `recording` and `pending_rec` are never held with another lock; never hold a mutex across a Tauri call that needs the main thread.
 pub struct AppState {
     pub config: std::sync::Mutex<store::Config>,
     pub clipboard: clipboard::Clipboard,
@@ -34,6 +34,8 @@ pub struct AppState {
         std::collections::HashMap<String, (std::path::PathBuf, std::path::PathBuf)>,
     >,
     pub recording: std::sync::Mutex<Option<recorder::Recording>>,
+    /// A recording waiting for its countdown: the region, and whether it's a whole monitor.
+    pub pending_rec: std::sync::Mutex<Option<(recorder::Region, bool)>>,
 }
 
 impl AppState {
@@ -48,6 +50,7 @@ impl AppState {
             thumb: std::sync::Mutex::new(None),
             editors: std::sync::Mutex::new(std::collections::HashMap::new()),
             recording: std::sync::Mutex::new(None),
+            pending_rec: std::sync::Mutex::new(None),
         }
     }
 }
@@ -119,6 +122,7 @@ fn main() {
             overlay::overlay_activate,
             overlay::overlay_cancel,
             overlay::overlay_capture,
+            overlay::overlay_record,
             overlay::set_overlay_options,
             overlay::pick_folder,
             overlay::countdown_info,
@@ -217,21 +221,10 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
                     }
                 });
                 Ok(())
+            } else if recorder::ffmpeg_path().is_none() {
+                Err(recorder::NO_FFMPEG.into())
             } else {
-                // Task 3 replaces this with overlay::start(app, "recarea").
-                let pos = app.cursor_position().map_err(err);
-                pos.and_then(|p| {
-                    let frames = capture::grab_all(false)?;
-                    let i = capture::frame_at(&frames, p.x as i32, p.y as i32);
-                    let f = frames.into_iter().nth(i).ok_or("no monitor found")?; // never index: zero monitors must not panic
-                    let region = recorder::Region {
-                        x: f.x,
-                        y: f.y,
-                        w: f.image.width(),
-                        h: f.image.height(),
-                    };
-                    recorder::start(app, region, true)
-                })
+                overlay::start(app, "recarea")
             }
         }
     };

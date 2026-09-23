@@ -51,6 +51,12 @@ function afterPrimary(token: number): Promise<void> {
   });
 }
 
+// The record modes select like area and screen do.
+const isArea = () => mode === 'area' || mode === 'recarea';
+const isScreen = () => mode === 'screen' || mode === 'recscreen';
+const isRecord = () => mode === 'recarea' || mode === 'recscreen';
+const NO_FFMPEG = "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or install ffmpeg (sudo apt install ffmpeg).";
+
 /** Image pixels per CSS pixel (monitor scale); read live because the window size settles after show. */
 const k = () => (info ? info.width / innerWidth : 1);
 const toImg = (e: MouseEvent): [number, number] => [e.clientX * k(), e.clientY * k()];
@@ -77,6 +83,10 @@ async function load() {
   drag = null;
   pointer = null;
   busy = false;
+  bar.querySelectorAll<HTMLButtonElement>('[data-mode^="rec"]').forEach((b) => {
+    b.disabled = !next.ffmpeg;
+    b.title = next.ffmpeg ? b.getAttribute('aria-label')! : NO_FFMPEG;
+  });
   renderOptions(next.options);
   render();
   await ipc.overlayReady(next.token);
@@ -84,7 +94,7 @@ async function load() {
 
 function highlight(): { rect: Rect; title: string; id?: number } | null {
   if (!info) return null;
-  if (mode === 'screen') return { rect: { x: 0, y: 0, w: info.width, h: info.height }, title: 'Screen' };
+  if (isScreen()) return { rect: { x: 0, y: 0, w: info.width, h: info.height }, title: 'Screen' };
   if (mode !== 'window' || !pointer) return null;
   const w = windowAt(info.windows, pointer[0], pointer[1]);
   return w ? { rect: clamp(w, info.width, info.height), title: w.title || w.app, id: w.id } : null;
@@ -92,12 +102,13 @@ function highlight(): { rect: Rect; title: string; id?: number } | null {
 
 function render() {
   if (!info) return;
-  document.body.dataset.mode = mode;
+  document.body.dataset.mode = isArea() ? 'area' : isScreen() ? 'screen' : 'window'; // the CSS cursors
   bar.hidden = !info.active;
   hint.hidden = !(info.active && info.hints);
   bar.querySelectorAll<HTMLElement>('[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
-  shade.hidden = mode !== 'area' || !!sel;
-  selEl.hidden = mode !== 'area' || !sel;
+  bar.querySelector<HTMLElement>('[data-act="capture"]')!.textContent = isRecord() ? 'Record' : 'Capture';
+  shade.hidden = !isArea() || !!sel;
+  selEl.hidden = !isArea() || !sel;
   if (sel) {
     place(selEl, sel);
     dimEl.textContent = `${Math.round(sel.w)} × ${Math.round(sel.h)}`;
@@ -109,13 +120,13 @@ function render() {
     const s = k();
     Object.assign(winlabel.style, { left: `${(t.rect.x + t.rect.w / 2) / s}px`, top: `${(t.rect.y + t.rect.h / 2) / s}px` });
     winlabel.querySelector('b')!.textContent = t.title;
-    winlabel.querySelector('small')!.textContent = `${Math.round(t.rect.w)} × ${Math.round(t.rect.h)} · click to capture`;
+    winlabel.querySelector('small')!.textContent = `${Math.round(t.rect.w)} × ${Math.round(t.rect.h)} · click to ${isRecord() ? 'record' : 'capture'}`;
   }
   renderLoupe();
 }
 
 function renderLoupe() {
-  const show = !!info && !!pixels && !!pointer && info.active && mode === 'area' && drag?.kind !== 'move' && !optionsOpen();
+  const show = !!info && !!pixels && !!pointer && info.active && isArea() && drag?.kind !== 'move' && !optionsOpen();
   loupe.hidden = coord.hidden = !show;
   if (!show || !info || !pixels || !pointer) return;
   const x = Math.min(info.width - 1, Math.max(0, Math.floor(pointer[0])));
@@ -145,7 +156,12 @@ function setMode(m: Mode) {
 
 function captureNow() {
   if (!info) return;
-  if (mode === 'screen') void capture({ kind: 'screen' });
+  if (isRecord()) {
+    if (mode === 'recscreen') void record(null);
+    else if (sel && sel.w >= 2 && sel.h >= 2) void record(sel);
+    return;
+  }
+  if (isScreen()) void capture({ kind: 'screen' });
   else if (mode === 'window') {
     const t = highlight();
     if (t?.id !== undefined) void capture({ kind: 'window', id: t.id, rect: t.rect });
@@ -161,6 +177,15 @@ async function capture(target: ipc.Target) {
   });
 }
 
+async function record(rect: ipc.Rect | null) {
+  if (!info || busy) return;
+  busy = true;
+  // Like capture(): Rust hides the overlays, runs the countdown, and notifies failures.
+  await ipc.overlayRecord(info.token, rect).catch(() => {
+    busy = false;
+  });
+}
+
 addEventListener('mousedown', (e) => {
   if (!info || busy || e.button !== 0 || (e.target as Element).closest('#bar, #pop')) return;
   closeOptions();
@@ -170,7 +195,7 @@ addEventListener('mousedown', (e) => {
   }
   pointer = toImg(e);
   const [x, y] = pointer;
-  if (mode !== 'area') return captureNow();
+  if (!isArea()) return captureNow();
   const h = sel ? handleAt(sel, x, y, 8 * k()) : null;
   drag =
     h === 'inside'
@@ -201,7 +226,7 @@ addEventListener('mouseup', () => {
 });
 
 addEventListener('dblclick', (e) => {
-  if (mode === 'area' && sel && handleAt(sel, ...toImg(e), 0) === 'inside') captureNow();
+  if (isArea() && sel && handleAt(sel, ...toImg(e), 0) === 'inside') captureNow();
 });
 
 addEventListener('keydown', (e) => {
@@ -212,8 +237,8 @@ addEventListener('keydown', (e) => {
   } else if (e.key === 'Enter') captureNow();
   else if (e.key === ' ') {
     e.preventDefault();
-    setMode(mode === 'window' ? 'area' : 'window');
-  } else if (e.key.startsWith('Arrow') && sel && mode === 'area') {
+    if (!isRecord()) setMode(mode === 'window' ? 'area' : 'window');
+  } else if (e.key.startsWith('Arrow') && sel && isArea()) {
     e.preventDefault();
     const d = e.shiftKey ? 10 : 1;
     const step: Record<string, [number, number]> = { ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d] };
@@ -224,8 +249,8 @@ addEventListener('keydown', (e) => {
 });
 
 bar.addEventListener('click', (e) => {
-  const b = (e.target as Element).closest<HTMLElement>('button');
-  if (!b) return;
+  const b = (e.target as Element).closest<HTMLButtonElement>('button');
+  if (!b || b.disabled) return;
   if (b.dataset.mode) setMode(b.dataset.mode as Mode);
   else if (b.dataset.act === 'cancel') void ipc.overlayCancel();
   else if (b.dataset.act === 'capture') captureNow();
@@ -235,7 +260,7 @@ bar.addEventListener('click', (e) => {
 void listen<number>('overlay:show', () => void load().catch(() => {}));
 void listen<Mode>('overlay:mode', (e) => {
   mode = e.payload;
-  if (mode !== 'area') drag = null;
+  if (!isArea()) drag = null;
   render();
 });
 void listen<number>('overlay:active', (e) => {

@@ -1,0 +1,9 @@
+/* The window is 8 px larger than the recorded area on every side, so the dashed line (3-5 px in)
+   and the corner brackets (0-3 px) stay outside the recorded pixels. */
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+.f { position: absolute; inset: 3px; border: 2px dashed rgba(255, 69, 58, 0.95); border-radius: 2px; }
+.c { position: absolute; width: 16px; height: 16px; border: 0 solid #ff453a; }
+.c1 { left: 0; top: 0; border-width: 3px 0 0 3px; }
+.c2 { right: 0; top: 0; border-width: 3px 3px 0 0; }
+.c3 { left: 0; bottom: 0; border-width: 0 0 3px 3px; }
+.c4 { right: 0; bottom: 0; border-width: 0 3px 3px 0; }

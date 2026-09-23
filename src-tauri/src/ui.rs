@@ -95,11 +95,12 @@ pub fn set_tray_timer(app: &AppHandle, secs: Option<u64>) {
     }
 }
 
-/// While recording: red tray icon, "Stop Recording", timer. Task 3 adds the frame and the pill.
+/// While recording: red tray icon, "Stop Recording", timer; for an area, also a dashed frame just
+/// outside it and the control pill. A full-screen recording would film both, so it gets neither.
 pub fn recording_started(
     app: &AppHandle,
-    _region: crate::recorder::Region,
-    _full: bool,
+    r: crate::recorder::Region,
+    full: bool,
 ) -> Result<(), String> {
     if let Some(item) = app.try_state::<TrayRecord>() {
         let _ = item.0.set_text("Stop Recording");
@@ -108,7 +109,80 @@ pub fn recording_started(
         let _ = tray.set_icon(Some(recording_icon()));
     }
     set_tray_timer(app, Some(0));
-    Ok(())
+    if full {
+        return Ok(());
+    }
+    let m = monitor_at(app, r.x.into(), r.y.into())?;
+    let s = m.scale_factor();
+    // recframe's CSS draws within 8 CSS px of the window edge: that many physical px per scale.
+    let margin = (8.0 * s).round() as i32;
+    let frame = popup(app, "recframe", "recframe/index.html", 100.0, 100.0, false)?;
+    frame
+        .set_position(PhysicalPosition::new(r.x - margin, r.y - margin))
+        .map_err(err)?;
+    frame
+        .set_size(PhysicalSize::new(
+            r.w + 2 * margin as u32,
+            r.h + 2 * margin as u32,
+        ))
+        .map_err(err)?;
+    #[cfg(target_os = "linux")]
+    unmanaged(&frame)?;
+    // After show: tao sets the empty input shape on the GdkWindow, which a never-shown window
+    // doesn't have yet (it unwraps it, aborting rshot).
+    frame.show().map_err(err)?;
+    frame.set_ignore_cursor_events(true).map_err(err)?;
+    let (pw, ph) = (300.0, 52.0);
+    let pill = popup(app, "pill", "pill/index.html", pw, ph, false)?;
+    let (mp, ms) = (m.position(), m.size());
+    let (x, y) = pill_position(
+        r,
+        margin,
+        ((pw * s) as i32, (ph * s) as i32, (4.0 * s) as i32),
+        (mp.x, mp.y, ms.width as i32, ms.height as i32),
+    );
+    pill.set_position(PhysicalPosition::new(x, y))
+        .map_err(err)?;
+    pill.show().map_err(err)
+}
+
+/// Makes a not-yet-shown window override-redirect, i.e. not managed by the window manager: GNOME
+/// animates managed windows opening and closing by scaling them, which would sweep the recording
+/// frame's line across the recorded area, and could push a frame larger than the monitor back
+/// onto it. Queued before `show()`, so it runs first (Tauri handles both, in order, on the main
+/// thread, and the window's position and size are applied later, before it maps).
+#[cfg(target_os = "linux")]
+fn unmanaged(w: &WebviewWindow) -> Result<(), String> {
+    let w2 = w.clone();
+    w.run_on_main_thread(move || {
+        if let Ok(gw) = w2.gtk_window() {
+            gw.realize();
+            if let Some(gdk) = gw.window() {
+                gdk.set_override_redirect(true);
+            }
+        }
+    })
+    .map_err(err)
+}
+
+/// The pill's top-left (physical px) for area `r` framed `margin` out: `gap` above the frame's
+/// top-right corner, else below the frame, and always on the monitor `(x, y, w, h)` (a monitor-tall
+/// area gets it over its bottom edge, in the video, rather than nowhere).
+fn pill_position(
+    r: crate::recorder::Region,
+    margin: i32,
+    (pw, ph, gap): (i32, i32, i32),
+    (mx, my, mw, mh): (i32, i32, i32, i32),
+) -> (i32, i32) {
+    let above = r.y - margin - gap - ph;
+    let y = if above >= my {
+        above
+    } else {
+        r.y + r.h as i32 + margin + gap
+    };
+    let x = r.x + r.w as i32 - pw;
+    // min then max, not clamp: no panic on a monitor smaller than the pill.
+    (x.min(mx + mw - pw).max(mx), y.min(my + mh - ph).max(my))
 }
 
 pub fn recording_stopped(app: &AppHandle) {
@@ -144,14 +218,15 @@ static QUITTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 
 /// Open editors are asked to close first (each prompts for unsaved changes); Quit exits once
 /// none is left, so after that a second Quit does. A recording is stopped and saved first, off the
-/// main thread (ffmpeg would otherwise outlive rshot and record until the disk is full); a Quit
-/// repeated meanwhile is ignored, as exiting would cut the save short.
+/// main thread (ffmpeg would otherwise outlive rshot and record until the disk is full), and a
+/// stop or discard already under way (pill, tray, shortcut) is waited for; a Quit repeated
+/// meanwhile is ignored, as exiting would cut the save short.
 fn quit(app: &AppHandle) {
     use std::sync::atomic::Ordering;
     if QUITTING.load(Ordering::Acquire) {
         return;
     }
-    if crate::recorder::is_recording(app) {
+    if crate::recorder::is_recording(app) || crate::recorder::is_ending() {
         QUITTING.store(true, Ordering::Release);
         let app = app.clone();
         std::thread::spawn(move || {
@@ -387,7 +462,7 @@ pub fn close_prefix(app: &AppHandle, prefix: &str) -> bool {
 }
 
 /// Takes rshot's own UI off the screen before a new grab, so it can't end up in the capture: an
-/// open overlay session, a countdown (dropping its pending capture) and the thumbnail card, all
+/// open overlay session, a countdown (dropping its pending capture or recording) and the thumbnail card, all
 /// always-on-top. Waits for the compositor only when something was showing. Not on the main thread.
 pub fn clear_own_ui(app: &AppHandle) {
     let state = app.state::<crate::AppState>();
@@ -396,6 +471,7 @@ pub fn clear_own_ui(app: &AppHandle) {
         hide_overlays(app);
     }
     state.pending.lock().unwrap().take();
+    state.pending_rec.lock().unwrap().take();
     let countdown = close_prefix(app, "countdown");
     let thumbnail = close_prefix(app, "thumbnail");
     if overlay || countdown || thumbnail {
@@ -403,7 +479,7 @@ pub fn clear_own_ui(app: &AppHandle) {
     }
 }
 
-/// A small undecorated, transparent, always-on-top window (thumbnail, countdown).
+/// A small undecorated, transparent, always-on-top window (thumbnail, countdown, recording frame and pill).
 pub fn popup(
     app: &AppHandle,
     prefix: &str,
@@ -546,4 +622,47 @@ pub fn show_thumbnail(app: &AppHandle) -> Result<(), String> {
     let y = m.position().y + m.size().height as i32 - ((h + 6.0) * s) as i32;
     win.set_position(PhysicalPosition::new(x, y)).map_err(err)?;
     win.show().map_err(err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::recorder::Region;
+
+    #[test]
+    fn pill_sits_outside_the_area_and_on_the_monitor() {
+        let area = |x, y, w, h| Region { x, y, w, h };
+        let pill = (300, 52, 4);
+        let mon = (1920, 0, 2560, 1600);
+        // Room above: right-aligned, clear of the 8 px frame.
+        assert_eq!(
+            pill_position(area(2500, 400, 600, 300), 8, pill, mon),
+            (2800, 336)
+        );
+        // None above: below the frame.
+        assert_eq!(
+            pill_position(area(2500, 20, 600, 300), 8, pill, mon),
+            (2800, 332)
+        );
+        // Monitor-tall: pulled up onto the monitor.
+        assert_eq!(
+            pill_position(area(2000, 0, 800, 1600), 8, pill, mon),
+            (2500, 1548)
+        );
+        // Narrower than the pill at the monitor's left edge: pulled right onto it.
+        assert_eq!(
+            pill_position(area(1920, 500, 100, 100), 8, pill, mon),
+            (1920, 436)
+        );
+        // A monitor smaller than the pill: its top-left corner.
+        assert_eq!(
+            pill_position(area(10, 10, 50, 50), 8, pill, (0, 0, 200, 40)),
+            (0, 0)
+        );
+        // Scale 2: everything doubles.
+        assert_eq!(
+            pill_position(area(2500, 400, 600, 300), 16, (600, 104, 8), mon),
+            (2500, 272)
+        );
+    }
 }

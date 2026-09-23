@@ -14,6 +14,7 @@ fn main() {
             "overlay_activate",
             "overlay_cancel",
             "overlay_capture",
+            "overlay_record",
             "set_overlay_options",
             "pick_folder",
             "countdown_info",

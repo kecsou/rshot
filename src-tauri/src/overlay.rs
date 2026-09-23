@@ -2,7 +2,9 @@
 
 use crate::{
     capture::{self, Frame, WinRect},
-    err, pipeline, store, ui, AppState,
+    err, pipeline,
+    recorder::Region,
+    store, ui, AppState,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -69,6 +71,8 @@ pub struct OverlayInfo {
     selection: Option<Rect>,
     hints: bool,
     options: OverlayOptions,
+    /// Recording needs ffmpeg; without it the record modes are disabled.
+    ffmpeg: bool,
 }
 
 /// The hint bar shows on the first few overlays only.
@@ -144,11 +148,13 @@ pub fn overlay_info(window: WebviewWindow, state: State<'_, AppState>) -> Option
             selection,
             hints: c.hints_shown <= HINT_SESSIONS,
             options: OverlayOptions::from_config(&c),
+            ffmpeg: false,
         };
         (info, f.x, f.y)
     };
     // Listing windows takes ~9 ms: not while holding the locks.
     info.windows = capture::windows_on(x, y, info.width, info.height);
+    info.ffmpeg = crate::recorder::ffmpeg_path().is_some();
     Some(info)
 }
 
@@ -305,6 +311,77 @@ fn capture_from(
     pipeline::finish_capture(app, img).map(|_| ())
 }
 
+/// Records the area (or the whole monitor when `rect` is None) after a 3 s countdown.
+#[tauri::command]
+pub async fn overlay_record(
+    app: AppHandle,
+    window: WebviewWindow,
+    token: u64,
+    rect: Option<Rect>,
+) -> Result<(), String> {
+    let index = ui::overlay_index(window.label()).ok_or("not an overlay")?;
+    let session = {
+        let state = app.state::<AppState>();
+        let mut guard = state.session.lock().unwrap();
+        match guard.take() {
+            Some(s) if s.token == token => s,
+            other => {
+                *guard = other;
+                return Ok(());
+            }
+        }
+    };
+    ui::hide_overlays(&app);
+    let result = record_from(&app, session, index, rect);
+    if let Err(e) = &result {
+        app.state::<AppState>().pending_rec.lock().unwrap().take();
+        ui::close_prefix(&app, "countdown");
+        pipeline::notify(&app, e);
+    }
+    result
+}
+
+fn record_from(
+    app: &AppHandle,
+    session: Session,
+    index: usize,
+    rect: Option<Rect>,
+) -> Result<(), String> {
+    let frame = session
+        .frames
+        .into_iter()
+        .nth(index)
+        .ok_or("that monitor is gone")?;
+    let (fw, fh) = frame.image.dimensions();
+    let region = match rect {
+        Some(r) => {
+            let [x, y, w, h] =
+                capture::clamp_rect(r.x, r.y, r.w, r.h, fw, fh).ok_or("empty selection")?;
+            remember(app, &frame.name, r);
+            Region {
+                x: frame.x + x as i32,
+                y: frame.y + y as i32,
+                w,
+                h,
+            }
+        }
+        None => Region {
+            x: frame.x,
+            y: frame.y,
+            w: fw,
+            h: fh,
+        },
+    };
+    *app.state::<AppState>().pending_rec.lock().unwrap() = Some((region, rect.is_none()));
+    ui::show_countdown(
+        app,
+        (
+            region.x + region.w as i32 / 2,
+            region.y + region.h as i32 / 2,
+        ),
+    )
+}
+
 /// A timed capture waiting for its countdown.
 pub struct Pending {
     pub monitor: String,
@@ -339,13 +416,27 @@ pub async fn pick_folder(app: AppHandle, window: WebviewWindow) -> Option<String
         .map(|p| p.display().to_string())
 }
 
+/// Seconds to count down: 3 before a recording, else the timed capture's.
 #[tauri::command]
 pub fn countdown_info(state: State<'_, AppState>) -> u8 {
+    if state.pending_rec.lock().unwrap().is_some() {
+        return 3;
+    }
     state.pending.lock().unwrap().as_ref().map_or(0, |p| p.secs)
 }
 
 #[tauri::command]
 pub async fn countdown_done(app: AppHandle) -> Result<(), String> {
+    let rec = app.state::<AppState>().pending_rec.lock().unwrap().take();
+    if let Some((region, full)) = rec {
+        ui::close_prefix(&app, "countdown");
+        std::thread::sleep(std::time::Duration::from_millis(200)); // let the compositor drop the ring
+        let result = crate::recorder::start(&app, region, full);
+        if let Err(e) = &result {
+            pipeline::notify(&app, e);
+        }
+        return result;
+    }
     let pending = app.state::<AppState>().pending.lock().unwrap().take();
     ui::close_prefix(&app, "countdown");
     let Some(p) = pending else { return Ok(()) };
@@ -360,6 +451,7 @@ pub async fn countdown_done(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn countdown_cancel(app: AppHandle, state: State<'_, AppState>) {
     state.pending.lock().unwrap().take();
+    state.pending_rec.lock().unwrap().take();
     ui::close_prefix(&app, "countdown");
 }
 

@@ -62,6 +62,9 @@ fn runnable(p: &Path) -> bool {
     p.is_file()
 }
 
+pub const NO_FFMPEG: &str =
+    "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or install ffmpeg (sudo apt install ffmpeg).";
+
 /// yuv420p needs even dimensions.
 #[cfg(target_os = "linux")]
 pub fn even(v: u32) -> u32 {
@@ -243,7 +246,7 @@ pub fn start(app: &AppHandle, region: Region, full: bool) -> Result<(), String> 
         if slot.is_some() {
             return Err("Already recording".into());
         }
-        let ffmpeg = ffmpeg_path().ok_or("ffmpeg isn't available, so recording is disabled")?;
+        let ffmpeg = ffmpeg_path().ok_or(NO_FFMPEG)?;
         let mp4 = store::new_recording_path(&cfg).map_err(err)?;
         let mkv = store::raw_recording(&mp4);
         let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".into());
@@ -296,7 +299,9 @@ fn spawn_tied(mut cmd: Command, level: Option<Arc<AtomicU32>>) -> Result<Child, 
         // SAFETY: prctl is async-signal-safe, as pre_exec requires.
         unsafe {
             cmd.pre_exec(|| {
-                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM as libc::c_ulong) == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
                 Ok(())
             });
         }
@@ -311,11 +316,17 @@ fn spawn_tied(mut cmd: Command, level: Option<Arc<AtomicU32>>) -> Result<Child, 
         if tx.send(Ok(child)).is_err() {
             return;
         }
-        for line in BufReader::new(out).lines().map_while(Result::ok) {
-            if let (Some(level), Some(db)) = (&level, parse_level(&line)) {
+        // To EOF whatever it reads: this thread ending SIGTERMs ffmpeg. A bad line is skipped.
+        let mut reader = BufReader::new(out);
+        let mut line = Vec::new();
+        while reader.read_until(b'\n', &mut line).is_ok_and(|n| n > 0) {
+            let db = std::str::from_utf8(&line).ok().and_then(parse_level);
+            if let (Some(level), Some(db)) = (&level, db) {
                 level.store(db.to_bits(), Ordering::Relaxed);
             }
+            line.clear();
         }
+        let _ = std::io::copy(&mut reader, &mut std::io::sink());
     });
     rx.recv().map_err(err)?
 }
@@ -358,6 +369,21 @@ fn take(app: &AppHandle) -> Option<Recording> {
     rec
 }
 
+/// Held while a stop or a discard finishes a recording, which takes it out of the slot first:
+/// Quit waits on it, so it can't exit halfway through a remux.
+static ENDING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn ending() -> std::sync::MutexGuard<'static, ()> {
+    ENDING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// A stop or a discard is finishing a recording.
+pub fn is_ending() -> bool {
+    matches!(ENDING.try_lock(), Err(std::sync::TryLockError::WouldBlock))
+}
+
 /// Asks ffmpeg to finish (`q`), waits up to 10 s, then kills it.
 fn end(rec: &mut Recording) {
     if let Some(mut stdin) = rec.child.stdin.take() {
@@ -373,8 +399,10 @@ fn end(rec: &mut Recording) {
 
 /// Ends the recording and turns it into the MP4 (written atomically: a hidden `.part.mp4`, then
 /// renamed; the MKV, which reserves the name, goes last). Nothing to do when none is running, e.g.
-/// the watchdog already ended it. Blocks for up to ~10 s: not on the main thread.
+/// the watchdog already ended it. Blocks for up to ~10 s (and waits for a stop or a discard
+/// already under way): not on the main thread.
 pub fn stop(app: &AppHandle) -> Result<(), String> {
+    let _ending = ending();
     let Some(mut rec) = take(app) else {
         return Ok(());
     };
@@ -401,6 +429,7 @@ pub fn stop(app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn discard(app: &AppHandle) {
+    let _ending = ending();
     if let Some(mut rec) = take(app) {
         end(&mut rec);
         let _ = std::fs::remove_file(&rec.mkv);

@@ -1,0 +1,14 @@
+html, body { height: 100%; overflow: hidden; }
+body { display: flex; align-items: center; justify-content: flex-end; padding: 0 4px; }
+/* A shadow that fits the window: .glass's own would be cut off at its edges. */
+.pill { display: flex; align-items: center; gap: 10px; padding: 5px 5px 5px 12px; border-radius: 99px; font: 600 12px Inter; white-space: nowrap; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 4px rgba(255, 69, 58, 0.25); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+#time { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.meter { display: flex; align-items: flex-end; gap: 2px; height: 14px; color: rgba(255, 255, 255, 0.7); }
+.meter i { width: 3px; height: 2px; border-radius: 1px; background: var(--ok); display: block; transition: height 0.1s linear; }
+.ghost { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.1); color: #ddd; }
+.ghost:hover { background: rgba(255, 255, 255, 0.18); }
+.ghost .ic { width: 13px; height: 13px; }
+.stop { height: 28px; padding: 0 12px 0 10px; border-radius: 99px; background: var(--danger); display: flex; align-items: center; gap: 7px; color: #fff; font: 600 12px Inter; }
+.stop i { width: 10px; height: 10px; border-radius: 2px; background: #fff; display: block; }

@@ -34,6 +34,7 @@ body[data-mode='window'], body[data-mode='screen'] { cursor: pointer; }
 #hint kbd { margin-right: 5px; }
 
 #bar { position: fixed; left: 50%; bottom: 4.5vh; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 6px; border-radius: 14px; white-space: nowrap; }
+#bar .btn:disabled { opacity: 0.35; background: none; }
 #bar .sep { width: 1px; height: 20px; background: rgba(255, 255, 255, 0.15); margin: 0 6px; }
 #bar .opt { font: 500 12px Inter; padding: 0 10px; height: 30px; display: flex; align-items: center; gap: 5px; border-radius: 8px; color: #e5e5ea; }
 #bar .opt:hover, #bar .opt.on { background: rgba(255, 255, 255, 0.17); }

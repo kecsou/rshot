@@ -12,7 +12,7 @@ export type OverlayOptions = {
 };
 export type OverlayInfo = {
   token: number;
-  mode: 'area' | 'window' | 'screen';
+  mode: 'area' | 'window' | 'screen' | 'recarea' | 'recscreen';
   index: number;
   active: boolean;
   width: number;
@@ -21,6 +21,8 @@ export type OverlayInfo = {
   selection: Rect | null;
   hints: boolean;
   options: OverlayOptions;
+  /** Recording needs ffmpeg: without it the record modes are disabled. */
+  ffmpeg: boolean;
 };
 export type Target = { kind: 'area'; rect: Rect } | { kind: 'window'; id: number; rect: Rect } | { kind: 'screen' };
 
@@ -30,6 +32,8 @@ export const overlayReady = (token: number) => invoke<void>('overlay_ready', { t
 export const overlayActivate = (token: number) => invoke<void>('overlay_activate', { token });
 export const overlayCancel = () => invoke<void>('overlay_cancel');
 export const overlayCapture = (token: number, target: Target) => invoke<void>('overlay_capture', { token, target });
+/** Records `rect` (null: the whole monitor) after a 3 s countdown. */
+export const overlayRecord = (token: number, rect: Rect | null) => invoke<void>('overlay_record', { token, rect });
 export const setOverlayOptions = (options: OverlayOptions) => invoke<void>('set_overlay_options', { options });
 export const pickFolder = () => invoke<string | null>('pick_folder');
 
@@ -75,3 +79,9 @@ export const copyPath = (path: string) => invoke<void>('copy_path', { path });
 
 export type Mic = { id: string; label: string };
 export const listMics = () => invoke<Mic[]>('list_mics');
+
+/** `level`: the mic's dBFS (-100..0), null without a mic. Null info: nothing is recording. */
+export type RecordingInfo = { elapsed_ms: number; mic: boolean; level: number | null };
+export const recordingInfo = () => invoke<RecordingInfo | null>('recording_info');
+export const recordingStop = () => invoke<void>('recording_stop');
+export const recordingDiscard = () => invoke<void>('recording_discard');
