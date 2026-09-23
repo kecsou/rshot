@@ -55,6 +55,12 @@ fn main() {
         eprintln!("{e}");
         std::process::exit(2)
     });
+    // A forwarded restore-shortcuts runs in the daemon, the one config writer. The call returning
+    // means it was handled; a failure there shows as a notification, not as this exit code.
+    #[cfg(target_os = "linux")]
+    if cmd != cli::Cmd::Daemon && forward_to_daemon() {
+        return;
+    }
     if cmd == cli::Cmd::RestoreShortcuts {
         std::process::exit(match shortcuts::restore_from_cli() {
             Ok(()) => 0,
@@ -63,10 +69,6 @@ fn main() {
                 1
             }
         });
-    }
-    #[cfg(target_os = "linux")]
-    if !matches!(cmd, cli::Cmd::Daemon | cli::Cmd::RestoreShortcuts) && forward_to_daemon() {
-        return;
     }
     // Frame-sized buffers (8-16 MB) must go back to the OS when freed. glibc's dynamic mmap
     // threshold otherwise rises to the first freed frame's size and parks later frames in
@@ -174,7 +176,10 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
     eprintln!("rshot: dispatch {cmd:?}");
     use cli::Cmd::*;
     let result = match cmd {
-        Daemon | RestoreShortcuts => Ok(()),
+        Daemon => Ok(()),
+        RestoreShortcuts => {
+            shortcuts::restore_and_save(&mut app.state::<AppState>().config.lock().unwrap())
+        }
         CaptureArea => overlay::start(app, "area"),
         CaptureScreen => pipeline::capture_screen_now(app),
         CaptureWindow => pipeline::capture_window_now(app),

@@ -87,10 +87,35 @@ pub fn take_over(cfg: &mut Config, exe: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Debug, PartialEq)]
+enum Put<'a> {
+    Set(&'a str),
+    Reset,
+}
+
+/// How one Shell key goes back. An empty list is never a real original: it is rshot's own cleared
+/// value, backed up as the "original" when config.toml was lost while the keys were taken. Setting
+/// it would leave Print dead for good; a reset gives GNOME's default back.
+fn put_back(v: &str) -> Put<'_> {
+    if parse_strv(v).is_empty() {
+        Put::Reset
+    } else {
+        Put::Set(v)
+    }
+}
+
 pub fn restore(cfg: &mut Config) -> Result<(), String> {
-    if let Some(backup) = &cfg.gnome_backup {
-        for (k, v) in backup {
-            gs(&["set", SHELL, k, v])?;
+    let backup = cfg.gnome_backup.clone().unwrap_or_default();
+    for (k, v) in &backup {
+        match put_back(v) {
+            Put::Set(v) => gs(&["set", SHELL, k, v])?,
+            Put::Reset => gs(&["reset", SHELL, k])?,
+        };
+    }
+    // A taken key with no backup (config.toml lost, then "Not now") may still hold rshot's `[]`.
+    for k in TAKEN_KEYS.iter().filter(|k| !backup.contains_key(**k)) {
+        if put_back(&gs(&["get", SHELL, k])?) == Put::Reset {
+            gs(&["reset", SHELL, k])?;
         }
     }
     cfg.gnome_backup = None;
@@ -109,7 +134,14 @@ pub fn restore(cfg: &mut Config) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::gsettings_ok;
+    use super::{gsettings_ok, put_back, Put};
+
+    #[test]
+    fn an_empty_original_is_reset_not_set() {
+        assert_eq!(put_back("['Print']"), Put::Set("['Print']"));
+        assert_eq!(put_back("@as []"), Put::Reset);
+        assert_eq!(put_back("[]"), Put::Reset);
+    }
 
     #[test]
     fn a_dconf_warning_is_a_failure() {

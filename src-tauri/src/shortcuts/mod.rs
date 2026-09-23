@@ -14,7 +14,7 @@ fn exe_command() -> String {
         .or_else(|| {
             std::env::current_exe()
                 .ok()
-                .map(|p| p.display().to_string())
+                .map(|p| live_path(&p.display().to_string()).into())
         })
         .unwrap_or_else(|| "rshot".into())
 }
@@ -39,17 +39,28 @@ pub fn restore(_cfg: &mut Config) -> Result<(), String> {
     Ok(())
 }
 
-/// `rshot restore-shortcuts`: works with no daemon running (used by uninstallers).
+/// Gives the shortcuts back and records that in config.toml.
+pub fn restore_and_save(c: &mut Config) -> Result<(), String> {
+    restore(c)?;
+    c.takeover = false;
+    store::save_config(c).map_err(|e| e.to_string())
+}
+
+/// `rshot restore-shortcuts` when no daemon answered (a running daemon does it itself, so its
+/// in-memory config doesn't write the old takeover back later). Used by uninstallers.
 pub fn restore_from_cli() -> Result<(), String> {
     // No config = rshot never ran for this user (prerm runs this for everyone logged in,
     // gdm included): nothing to restore, and no config.toml to create.
     if !store::config_path().exists() {
         return Ok(());
     }
-    let mut c = store::load_config();
-    restore(&mut c)?;
-    c.takeover = false;
-    store::save_config(&c).map_err(|e| e.to_string())
+    restore_and_save(&mut store::load_config())
+}
+
+/// Once a package upgrade has replaced the running binary, Linux reports it as
+/// `/usr/bin/rshot (deleted)`; the new one is at the same path.
+fn live_path(p: &str) -> &str {
+    p.strip_suffix(" (deleted)").unwrap_or(p)
 }
 
 /// `"exe" sub`, quoted by the Desktop Entry Exec rules GNOME applies to custom shortcuts
@@ -85,6 +96,15 @@ pub fn manual_commands(c: &Config) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_replaced_binary_keeps_its_path() {
+        assert_eq!(
+            super::live_path("/usr/bin/rshot (deleted)"),
+            "/usr/bin/rshot"
+        );
+        assert_eq!(super::live_path("/usr/bin/rshot"), "/usr/bin/rshot");
+    }
+
     #[test]
     fn commands_survive_exec_parsing() {
         assert_eq!(

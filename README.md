@@ -29,6 +29,7 @@ Turn off **Settings → Take over system screenshot shortcuts**, or run:
 rshot restore-shortcuts
 ```
 
+While rshot is running, the running app does the restore; if it fails, it says so in a notification.
 Uninstalling the `.deb` does this for every logged-in user. If it was removed while you were
 logged out, give GNOME its keys back and remove rshot's three custom shortcuts (or delete the
 three **rshot** entries in Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts):
