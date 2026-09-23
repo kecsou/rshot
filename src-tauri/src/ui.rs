@@ -256,11 +256,32 @@ pub fn adopt_file_dialog(parent: &WebviewWindow) {
 
 static POPUP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-pub fn close_prefix(app: &AppHandle, prefix: &str) {
+/// Destroys every `{prefix}-*` window; true if there was one.
+pub fn close_prefix(app: &AppHandle, prefix: &str) -> bool {
+    let mut found = false;
     for (label, w) in app.webview_windows() {
         if label.starts_with(&format!("{prefix}-")) {
+            found = true;
             let _ = w.destroy();
         }
+    }
+    found
+}
+
+/// Takes rshot's own UI off the screen before a new grab, so it can't end up in the capture: an
+/// open overlay session, a countdown (dropping its pending capture) and the thumbnail card, all
+/// always-on-top. Waits for the compositor only when something was showing. Not on the main thread.
+pub fn clear_own_ui(app: &AppHandle) {
+    let state = app.state::<crate::AppState>();
+    let overlay = state.session.lock().unwrap().take().is_some();
+    if overlay {
+        hide_overlays(app);
+    }
+    state.pending.lock().unwrap().take();
+    let countdown = close_prefix(app, "countdown");
+    let thumbnail = close_prefix(app, "thumbnail");
+    if overlay || countdown || thumbnail {
+        std::thread::sleep(Duration::from_millis(150));
     }
 }
 

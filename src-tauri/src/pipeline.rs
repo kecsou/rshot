@@ -61,6 +61,7 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
 }
 
 pub fn capture_screen_now(app: &AppHandle) -> Result<(), String> {
+    crate::ui::clear_own_ui(app);
     let show_pointer = app.state::<AppState>().config.lock().unwrap().show_pointer;
     let frames = capture::grab_all(show_pointer)?;
     let pos = app.cursor_position().map_err(err)?;
@@ -70,6 +71,7 @@ pub fn capture_screen_now(app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn capture_window_now(app: &AppHandle) -> Result<(), String> {
+    crate::ui::clear_own_ui(app);
     finish_capture(app, capture::focused_window_image()?).map(|_| ())
 }
 

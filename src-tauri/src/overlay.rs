@@ -85,6 +85,7 @@ fn epoch_ms() -> u128 {
 pub fn start(app: &AppHandle, mode: &str) -> Result<(), String> {
     let started = Instant::now();
     eprintln!("rshot: overlay requested at {}", epoch_ms());
+    ui::clear_own_ui(app);
     let state = app.state::<AppState>();
     let show_pointer = state.config.lock().unwrap().show_pointer;
     let frames = capture::grab_all(show_pointer)?;
@@ -276,7 +277,10 @@ fn capture_from(
             target,
             secs,
         });
-        return ui::show_countdown(app, center);
+        return ui::show_countdown(app, center).inspect_err(|_| {
+            app.state::<AppState>().pending.lock().unwrap().take();
+            ui::close_prefix(app, "countdown");
+        });
     }
     let (w, h) = frame.image.dimensions();
     let clamp = |r: Rect| {
@@ -354,6 +358,7 @@ pub fn countdown_cancel(app: AppHandle, state: State<'_, AppState>) {
 
 /// After the countdown: grab the live screen again and cut the same target.
 fn run_pending(app: &AppHandle, p: Pending) -> Result<(), String> {
+    ui::clear_own_ui(app);
     let img = match p.target {
         Target::Window { id, .. } => capture::window_image(id)?,
         target => {
