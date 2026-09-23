@@ -1,8 +1,8 @@
 //! What happens after pixels are chosen: PNG, atomic save, clipboard, sound, feedback.
 
-use crate::{capture, err, store, AppState};
+use crate::{capture, err, store, store::Config, AppState};
 use image::RgbaImage;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 
@@ -32,14 +32,32 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
         .clipboard
         .copy_capture(&path, Some(&png), cfg.clipboard_mode);
     eprintln!("rshot: saved and copied at {}", crate::overlay::epoch_ms());
+    finish(app, &cfg, &path, "image", copied);
+    Ok(path)
+}
+
+/// After a recording: clipboard (path + file, never an image), then as for a screenshot.
+pub fn finish_video(app: &AppHandle, path: &Path) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let cfg = state.config.lock().unwrap().clone();
+    let copied = state.clipboard.copy_capture(path, None, cfg.clipboard_mode);
+    finish(app, &cfg, path, "video", copied);
+    Ok(())
+}
+
+/// The shared end of a screenshot or a recording (`kind` "image"/"video"): last capture,
+/// thumbnail card, shutter sound, and feedback when the clipboard failed.
+fn finish(app: &AppHandle, cfg: &Config, path: &Path, kind: &str, copied: Result<(), String>) {
+    let state = app.state::<AppState>();
     if let Err(e) = &copied {
         eprintln!("rshot: clipboard: {e}");
     }
-    *state.last_capture.lock().unwrap() = Some(path.clone());
+    *state.last_capture.lock().unwrap() = Some(path.to_path_buf());
     *state.thumb.lock().unwrap() = Some(crate::thumbnail::Thumb {
         path: path.display().to_string(),
-        display: crate::thumbnail::tildify(&path),
+        display: crate::thumbnail::tildify(path),
         copied: copied.is_ok(),
+        kind: kind.into(),
     });
     if cfg.shutter_sound {
         play_shutter(app);
@@ -53,10 +71,17 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
         // An older card would otherwise linger with actions the guard now refuses.
         crate::ui::close_prefix(app, "thumbnail");
         if copied.is_err() {
-            notify(app, "Screenshot saved, but copying to the clipboard failed");
+            let what = if kind == "video" {
+                "Recording"
+            } else {
+                "Screenshot"
+            };
+            notify(
+                app,
+                &format!("{what} saved, but copying to the clipboard failed"),
+            );
         }
     }
-    Ok(path)
 }
 
 pub fn capture_screen_now(app: &AppHandle) -> Result<(), String> {

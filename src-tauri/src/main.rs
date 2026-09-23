@@ -6,7 +6,6 @@ mod clipboard;
 mod editor;
 mod overlay;
 mod pipeline;
-#[allow(dead_code)] // wired up in Task 2
 mod recorder;
 mod settings;
 mod shortcuts;
@@ -21,7 +20,7 @@ pub fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-/// Lock order: session → config; last_capture → thumb; `editors` is never held with another lock; never hold a mutex across a Tauri call that needs the main thread.
+/// Lock order: session → config; last_capture → thumb; `editors` and `recording` are never held with another lock; never hold a mutex across a Tauri call that needs the main thread.
 pub struct AppState {
     pub config: std::sync::Mutex<store::Config>,
     pub clipboard: clipboard::Clipboard,
@@ -34,6 +33,7 @@ pub struct AppState {
     pub editors: std::sync::Mutex<
         std::collections::HashMap<String, (std::path::PathBuf, std::path::PathBuf)>,
     >,
+    pub recording: std::sync::Mutex<Option<recorder::Recording>>,
 }
 
 impl AppState {
@@ -47,6 +47,7 @@ impl AppState {
             pending: std::sync::Mutex::new(None),
             thumb: std::sync::Mutex::new(None),
             editors: std::sync::Mutex::new(std::collections::HashMap::new()),
+            recording: std::sync::Mutex::new(None),
         }
     }
 }
@@ -138,6 +139,10 @@ fn main() {
             settings::onboarding_choice,
             settings::open_config,
             settings::close_window,
+            recorder::recording_info,
+            recorder::recording_stop,
+            recorder::recording_discard,
+            recorder::list_mics,
         ])
         .setup(move |app| {
             ui::create_tray(app.handle())?;
@@ -201,14 +206,55 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
         CaptureArea => overlay::start(app, "area"),
         CaptureScreen => pipeline::capture_screen_now(app),
         CaptureWindow => pipeline::capture_window_now(app),
+        Record => {
+            if recorder::is_recording(app) {
+                recorder::stop(app)
+            } else {
+                // Task 3 replaces this with overlay::start(app, "recarea").
+                let pos = app.cursor_position().map_err(err);
+                pos.and_then(|p| {
+                    let frames = capture::grab_all(false)?;
+                    let i = capture::frame_at(&frames, p.x as i32, p.y as i32);
+                    let f = frames.into_iter().nth(i).ok_or("no monitor found")?; // never index: zero monitors must not panic
+                    let region = recorder::Region {
+                        x: f.x,
+                        y: f.y,
+                        w: f.image.width(),
+                        h: f.image.height(),
+                    };
+                    recorder::start(app, region, true)
+                })
+            }
+        }
     };
     if let Err(e) = result {
         pipeline::notify(app, &e);
     }
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(test)]
 mod tests {
+    /// build.rs's allow-list (what capabilities can grant) must name exactly the registered commands.
+    #[test]
+    fn allow_list_matches_the_registered_commands() {
+        let build = include_str!("../build.rs");
+        let list = build.split_once(".commands(&[").unwrap().1;
+        let list = list.split_once("])").unwrap().0;
+        let mut allowed: Vec<&str> = list.split('"').skip(1).step_by(2).collect();
+        let main = include_str!("main.rs");
+        let handlers = main.split_once("generate_handler![").unwrap().1;
+        let handlers = handlers.split_once(']').unwrap().0;
+        let mut registered: Vec<&str> = handlers
+            .split(',')
+            .filter_map(|h| h.trim().rsplit_once("::").map(|(_, name)| name))
+            .collect();
+        allowed.sort_unstable();
+        registered.sort_unstable();
+        assert!(registered.len() > 20, "parsed {registered:?}");
+        assert_eq!(allowed, registered);
+    }
+
+    #[cfg(target_os = "linux")]
     #[test]
     fn single_instance_name_follows_the_bundle_identifier() {
         let conf: serde_json::Value =

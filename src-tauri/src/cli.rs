@@ -1,4 +1,4 @@
-//! Command line: `rshot`, `rshot capture area|screen|window`, `rshot restore-shortcuts`.
+//! Command line: `rshot`, `rshot capture area|screen|window`, `rshot record`, `rshot restore-shortcuts`.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cmd {
@@ -6,10 +6,12 @@ pub enum Cmd {
     CaptureArea,
     CaptureScreen,
     CaptureWindow,
+    /// Starts a recording, or stops the one running.
+    Record,
     RestoreShortcuts,
 }
 
-pub const USAGE: &str = "usage: rshot [capture area|screen|window] [restore-shortcuts]";
+pub const USAGE: &str = "usage: rshot [capture area|screen|window] [record] [restore-shortcuts]";
 
 /// Parses the arguments that follow the program name.
 pub fn parse(args: &[String]) -> Result<Cmd, String> {
@@ -19,6 +21,7 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
         ["capture", "area"] => Ok(Cmd::CaptureArea),
         ["capture", "screen"] => Ok(Cmd::CaptureScreen),
         ["capture", "window"] => Ok(Cmd::CaptureWindow),
+        ["record"] => Ok(Cmd::Record),
         ["restore-shortcuts"] => Ok(Cmd::RestoreShortcuts),
         _ => Err(USAGE.to_string()),
     }
@@ -39,6 +42,7 @@ mod tests {
         assert_eq!(p(&["capture", "screen"]), Ok(Cmd::CaptureScreen));
         assert_eq!(p(&["capture", "window"]), Ok(Cmd::CaptureWindow));
         assert_eq!(p(&["restore-shortcuts"]), Ok(Cmd::RestoreShortcuts));
+        assert_eq!(p(&["record"]), Ok(Cmd::Record));
     }
 
     #[test]

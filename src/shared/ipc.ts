@@ -33,7 +33,7 @@ export const overlayCapture = (token: number, target: Target) => invoke<void>('o
 export const setOverlayOptions = (options: OverlayOptions) => invoke<void>('set_overlay_options', { options });
 export const pickFolder = () => invoke<string | null>('pick_folder');
 
-export type Thumb = { path: string; display: string; copied: boolean };
+export type Thumb = { path: string; display: string; copied: boolean; kind: 'image' | 'video' };
 export const thumbnailInfo = () => invoke<Thumb | null>('thumbnail_info');
 export const readCapture = (path: string) => invoke<ArrayBuffer>('read_capture', { path });
 export const revealCapture = (path: string) => invoke<void>('reveal_capture', { path });
@@ -72,3 +72,6 @@ export const editorInfo = () => invoke<EditorInfo>('editor_info');
 export const saveImage = (png: Uint8Array) => invoke<boolean>('save_image', png);
 export const editorDelete = () => invoke<void>('editor_delete');
 export const copyPath = (path: string) => invoke<void>('copy_path', { path });
+
+export type Mic = { id: string; label: string };
+export const listMics = () => invoke<Mic[]>('list_mics');

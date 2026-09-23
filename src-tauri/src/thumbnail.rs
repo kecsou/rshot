@@ -11,6 +11,8 @@ pub struct Thumb {
     pub path: String,
     pub display: String,
     pub copied: bool,
+    /// "image" or "video".
+    pub kind: String,
 }
 
 /// `/home/me/Pictures/x.png` → `~/Pictures/x.png` (display only; the clipboard keeps the absolute path).
@@ -98,17 +100,34 @@ pub fn delete_capture(
 #[tauri::command(async)]
 pub fn retry_copy(state: State<'_, AppState>, path: String) -> Result<(), String> {
     let (given, canon) = guard(&state, &path)?;
-    let png = std::fs::read(canon).map_err(err)?;
+    // A recording goes on as its path and file only, never as image/png.
+    let png = is_png(&canon)
+        .then(|| std::fs::read(&canon))
+        .transpose()
+        .map_err(err)?;
     let mode = state.config.lock().unwrap().clipboard_mode;
-    state.clipboard.copy_capture(&given, Some(&png), mode)?;
+    state.clipboard.copy_capture(&given, png.as_deref(), mode)?;
     if let Some(t) = state.thumb.lock().unwrap().as_mut() {
         t.copied = true;
     }
     Ok(())
 }
 
+fn is_png(p: &Path) -> bool {
+    p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_pngs_go_on_the_clipboard_as_images() {
+        use std::path::Path;
+        assert!(super::is_png(Path::new("/v/Screenshot_1.png")));
+        assert!(super::is_png(Path::new("/v/A.PNG")));
+        assert!(!super::is_png(Path::new("/v/Recording_1.mp4")));
+        assert!(!super::is_png(Path::new("/v/png")));
+    }
+
     #[test]
     fn only_the_last_capture_or_an_open_file_is_allowed() {
         let dir = std::env::temp_dir().join(format!("rshot-guard-{}", std::process::id()));

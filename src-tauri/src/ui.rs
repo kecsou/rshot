@@ -16,15 +16,27 @@ use tauri::{
 #[cfg(target_os = "linux")]
 use gtk::prelude::*;
 
+/// The tray's Record item, relabelled "Stop Recording" while recording (appindicator trays
+/// can't be clicked on Linux, so the menu is the tray's stop button).
+pub struct TrayRecord(pub MenuItem<tauri::Wry>);
+
 pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     let item = |id: &str, text: &str| MenuItem::with_id(app, id, text, true, None::<&str>);
     let sep = || tauri::menu::PredefinedMenuItem::separator(app);
+    let record = MenuItem::with_id(
+        app,
+        "record",
+        RECORD_LABEL,
+        crate::recorder::ffmpeg_path().is_some(),
+        None::<&str>,
+    )?;
     let menu = Menu::with_items(
         app,
         &[
             &item("area", "Capture Area")?,
             &item("screen", "Capture Screen")?,
             &item("window", "Capture Window")?,
+            &record,
             &sep()?,
             &item("last", "Open Last Capture")?,
             &item("folder", "Open Screenshots Folder")?,
@@ -33,7 +45,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
             &item("quit", "Quit rshot")?,
         ],
     )?;
-    TrayIconBuilder::new()
+    TrayIconBuilder::with_id(TRAY)
         .icon(
             app.default_window_icon()
                 .cloned()
@@ -52,6 +64,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
                         "area" => Cmd::CaptureArea,
                         "screen" => Cmd::CaptureScreen,
                         "window" => Cmd::CaptureWindow,
+                        "record" => Cmd::Record,
                         _ => return,
                     };
                     let app = app.clone();
@@ -68,12 +81,78 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .build(app)?;
+    app.manage(TrayRecord(record));
     Ok(())
 }
 
+const TRAY: &str = "main";
+const RECORD_LABEL: &str = "Record Screen…";
+
+/// `■ m:ss` next to the tray icon; `None` removes it.
+pub fn set_tray_timer(app: &AppHandle, secs: Option<u64>) {
+    if let Some(tray) = app.tray_by_id(TRAY) {
+        let _ = tray.set_title(secs.map(|s| format!("■ {}:{:02}", s / 60, s % 60)));
+    }
+}
+
+/// While recording: red tray icon, "Stop Recording", timer. Task 3 adds the frame and the pill.
+pub fn recording_started(
+    app: &AppHandle,
+    _region: crate::recorder::Region,
+    _full: bool,
+) -> Result<(), String> {
+    if let Some(item) = app.try_state::<TrayRecord>() {
+        let _ = item.0.set_text("Stop Recording");
+    }
+    if let Some(tray) = app.tray_by_id(TRAY) {
+        let _ = tray.set_icon(Some(recording_icon()));
+    }
+    set_tray_timer(app, Some(0));
+    Ok(())
+}
+
+pub fn recording_stopped(app: &AppHandle) {
+    if let Some(item) = app.try_state::<TrayRecord>() {
+        let _ = item.0.set_text(RECORD_LABEL);
+    }
+    if let Some(tray) = app.tray_by_id(TRAY) {
+        let _ = tray.set_icon(app.default_window_icon().cloned());
+    }
+    set_tray_timer(app, None);
+    close_prefix(app, "recframe");
+    close_prefix(app, "pill");
+}
+
+/// A red (#ff453a) dot, 32×32 RGBA.
+fn recording_icon() -> tauri::image::Image<'static> {
+    const N: u32 = 32;
+    let rgba = (0..N * N)
+        .flat_map(|i| {
+            let (x, y) = ((i % N) as f32 - 15.5, (i / N) as f32 - 15.5);
+            if x * x + y * y <= 13.0 * 13.0 {
+                [0xff, 0x45, 0x3a, 0xff]
+            } else {
+                [0; 4]
+            }
+        })
+        .collect();
+    tauri::image::Image::new_owned(rgba, N, N)
+}
+
 /// Open editors are asked to close first (each prompts for unsaved changes); Quit exits once
-/// none is left, so after that a second Quit does.
+/// none is left, so after that a second Quit does. A recording is stopped and saved first, off the
+/// main thread (ffmpeg would otherwise outlive rshot and record until the disk is full).
 fn quit(app: &AppHandle) {
+    if crate::recorder::is_recording(app) {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = crate::recorder::stop(&app) {
+                crate::pipeline::notify(&app, &e);
+            }
+            quit(&app);
+        });
+        return;
+    }
     let labels: Vec<String> = app
         .state::<crate::AppState>()
         .editors

@@ -19,10 +19,12 @@ pub enum ClipboardMode {
 
 /// Shortcuts in neutral "Mod+Mod+Key" form, e.g. "Shift+Print".
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(default)]
 pub struct Shortcuts {
     pub area: String,
     pub screen: String,
     pub window: String,
+    pub record: String,
 }
 
 impl Default for Shortcuts {
@@ -31,6 +33,7 @@ impl Default for Shortcuts {
             area: "Print".into(),
             screen: "Shift+Print".into(),
             window: "Alt+Print".into(),
+            record: "Ctrl+Alt+Shift+R".into(),
         }
     }
 }
@@ -62,6 +65,10 @@ pub struct Config {
     pub shortcuts: Shortcuts,
     /// Original GNOME keybinding values (GVariant text), kept while rshot owns them.
     pub gnome_backup: Option<BTreeMap<String, String>>,
+    pub recordings_dir: Option<PathBuf>,
+    /// PulseAudio/PipeWire source id; `None` records no sound.
+    pub mic: Option<String>,
+    pub fps: u8,
 }
 
 impl Default for Config {
@@ -80,6 +87,9 @@ impl Default for Config {
             takeover: false,
             shortcuts: Shortcuts::default(),
             gnome_backup: None,
+            recordings_dir: None,
+            mic: None,
+            fps: 30,
         }
     }
 }
@@ -133,10 +143,21 @@ pub fn screenshots_dir(c: &Config) -> PathBuf {
 }
 
 fn default_screenshots_dir() -> PathBuf {
-    dirs::picture_dir()
-        .or_else(|| dirs::home_dir().map(|h| h.join("Pictures")))
+    default_dir(dirs::picture_dir(), "Pictures", "Screenshots")
+}
+
+pub fn recordings_dir(c: &Config) -> PathBuf {
+    c.recordings_dir
+        .as_deref()
+        .and_then(absolute)
+        .unwrap_or_else(|| default_dir(dirs::video_dir(), "Videos", "Screencasts"))
+}
+
+/// `sub` in the XDG folder, else in `~/<home_sub>`.
+fn default_dir(xdg: Option<PathBuf>, home_sub: &str, sub: &str) -> PathBuf {
+    xdg.or_else(|| dirs::home_dir().map(|h| h.join(home_sub)))
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Screenshots")
+        .join(sub)
 }
 
 /// `~/x` → `<home>/x`; any other relative path → `None` (the clipboard only gets absolute paths).
@@ -160,6 +181,37 @@ pub fn capture_stem(prefix: &str, t: NaiveDateTime) -> String {
 pub fn save_screenshot(c: &Config, png: &[u8]) -> io::Result<PathBuf> {
     let stem = capture_stem("Screenshot", Local::now().naive_local());
     write_new(&screenshots_dir(c), &stem, "png", png)
+}
+
+/// A free `Recording_<now>.mp4` (or `_2`, `_3`…) in the recordings folder, which is created.
+pub fn new_recording_path(c: &Config) -> io::Result<PathBuf> {
+    let dir = recordings_dir(c);
+    fs::create_dir_all(&dir)?;
+    let stem = capture_stem("Recording", Local::now().naive_local());
+    Ok(free_recording(&dir, &stem))
+}
+
+/// The hidden `.<stem>.mkv` ffmpeg writes first; Stop remuxes it into `mp4`.
+pub fn raw_recording(mp4: &Path) -> PathBuf {
+    let stem = mp4.file_stem().unwrap_or_default().to_string_lossy();
+    mp4.with_file_name(format!(".{stem}.mkv"))
+}
+
+/// A name is taken while its MP4 or its raw file exists (one of them does throughout a remux).
+/// ponytail: an exists() check, not a claim; fine while starts are serialised (the recorder picks
+/// the name under its lock). Claim with create_new if that ever changes.
+fn free_recording(dir: &Path, stem: &str) -> PathBuf {
+    numbered(dir, stem, "mp4")
+        .find(|p| !p.exists() && !raw_recording(p).exists())
+        .expect("an unused name exists")
+}
+
+/// `stem.ext`, `stem_2.ext`, `stem_3.ext`…
+fn numbered<'a>(dir: &'a Path, stem: &'a str, ext: &'a str) -> impl Iterator<Item = PathBuf> + 'a {
+    (1..).map(move |n| match n {
+        1 => dir.join(format!("{stem}.{ext}")),
+        n => dir.join(format!("{stem}_{n}.{ext}")),
+    })
 }
 
 static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -192,11 +244,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// write_atomic, but never replaces one, even when another capture races for the same name.
 pub fn write_new(dir: &Path, stem: &str, ext: &str, bytes: &[u8]) -> io::Result<PathBuf> {
     let tmp = write_temp(dir, stem, bytes)?;
-    let placed = (1..)
-        .map(|n| match n {
-            1 => dir.join(format!("{stem}.{ext}")),
-            n => dir.join(format!("{stem}_{n}.{ext}")),
-        })
+    let placed = numbered(dir, stem, ext)
         .find_map(|p| match place_new(&tmp, &p) {
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => None,
             r => Some(r.map(|()| p)),
@@ -346,6 +394,68 @@ mod tests {
         assert_eq!(dir_setting("~/Shots"), Some(home.join("Shots")));
         assert_eq!(dir_setting("Shots"), None);
         assert_eq!(dir_setting(&abs.display().to_string()), Some(abs));
+    }
+
+    #[test]
+    fn recording_defaults_and_old_configs_load() {
+        let c = Config::default();
+        assert_eq!(c.fps, 30);
+        assert_eq!(c.mic, None);
+        assert_eq!(c.shortcuts.record, "Ctrl+Alt+Shift+R");
+        let d = tmp("oldcfg");
+        let p = d.join("config.toml");
+        fs::write(
+            &p,
+            "[shortcuts]\narea = \"Print\"\nscreen = \"Shift+Print\"\nwindow = \"Alt+Print\"\n",
+        )
+        .unwrap();
+        assert_eq!(load_config_from(&p).shortcuts.record, "Ctrl+Alt+Shift+R");
+        fs::remove_dir_all(&d).unwrap();
+        assert!(recordings_dir(&c).ends_with("Screencasts"));
+    }
+
+    #[test]
+    fn recordings_folder_is_absolute_or_the_default() {
+        let home = dirs::home_dir().unwrap();
+        let default = recordings_dir(&Config::default());
+        let with = |p: &str| {
+            recordings_dir(&Config {
+                recordings_dir: Some(p.into()),
+                ..Config::default()
+            })
+        };
+        assert_eq!(with("~/Casts"), home.join("Casts"));
+        assert_eq!(with("Casts"), default);
+        let abs = std::env::temp_dir().join("casts");
+        assert_eq!(with(&abs.display().to_string()), abs);
+    }
+
+    #[test]
+    fn recording_paths_are_new_and_count_up() {
+        let d = tmp("recpath");
+        let c = Config {
+            recordings_dir: Some(d.join("sub")),
+            ..Config::default()
+        };
+        let p = new_recording_path(&c).unwrap();
+        assert_eq!(p.parent(), Some(d.join("sub").as_path()), "folder created");
+        let name = p.file_name().unwrap().to_str().unwrap();
+        assert!(
+            name.starts_with("Recording_") && name.ends_with(".mp4"),
+            "{name}"
+        );
+        assert!(!p.exists(), "only named, not created");
+        assert_eq!(
+            raw_recording(&p),
+            p.with_file_name(format!(".{}", name.replace(".mp4", ".mkv")))
+        );
+        assert_eq!(free_recording(&d, "R"), d.join("R.mp4"));
+        fs::write(d.join("R.mp4"), b"").unwrap();
+        assert_eq!(free_recording(&d, "R"), d.join("R_2.mp4"));
+        // Still being remuxed (or kept after a crash): its raw file holds the name too.
+        fs::write(d.join(".R_2.mkv"), b"").unwrap();
+        assert_eq!(free_recording(&d, "R"), d.join("R_3.mp4"));
+        fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
