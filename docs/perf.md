@@ -192,3 +192,20 @@ page would cut both that time and the page faults.
 Round 2 (D2 build) is accepted against the recalibrated spec §5 targets: typical key→visible ≤ 250 ms (mean ≈ 229 ms,
 34/37 runs ≤ 250, max 257) and ≤ 320 MB PSS after use (≈ 303 MB). Closing the remaining gap would need a native
 overlay, which is out of scope. Latencies are logged before the final map/paint, so the real times are slightly higher.
+
+## Capture → saved + clipboard (2026-09-23, final-review fix wave)
+
+Same machine, release build (`npm run tauri build -- --no-bundle`). Overlay on DP-4 with a remembered 2557×1597
+selection (≈ the whole 2560×1600 monitor), `Enter` pressed with `scripts/xdo.py`. Start = the daemon's `capture
+requested at` line (entry of `overlay_capture`, one IPC hop after the key); end = `saved and copied at` (PNG
+encoded, written, clipboard owner answered).
+
+| Run | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| ms | 33 | 55 | 33 | 44 | 38 | 33 | 73 |
+
+**Pass**: 33–73 ms (median 38) against ≤ 300 ms (spec §5). Not included: the key/mouse event → IPC hop.
+
+Side effect of taking rshot's own UI down before a grab: when a thumbnail card (or an overlay) is still on
+screen, `Print` waits 150 ms for the compositor first. In these runs a card was always up: key → visible was
+307–357 ms, against 189 ms for the one run with nothing of rshot on screen.

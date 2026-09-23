@@ -74,7 +74,7 @@ pub struct OverlayInfo {
 /// The hint bar shows on the first few overlays only.
 const HINT_SESSIONS: u32 = 5;
 
-fn epoch_ms() -> u128 {
+pub fn epoch_ms() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
@@ -234,6 +234,7 @@ pub async fn overlay_capture(
     token: u64,
     target: Target,
 ) -> Result<(), String> {
+    eprintln!("rshot: capture requested at {}", epoch_ms());
     let index = ui::overlay_index(window.label()).ok_or("not an overlay")?;
     let session = {
         let state = app.state::<AppState>();

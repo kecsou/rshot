@@ -31,6 +31,7 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
     let copied = state
         .clipboard
         .copy_capture(&path, Some(&png), cfg.clipboard_mode);
+    eprintln!("rshot: saved and copied at {}", crate::overlay::epoch_ms());
     if let Err(e) = &copied {
         eprintln!("rshot: clipboard: {e}");
     }
