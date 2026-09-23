@@ -47,7 +47,8 @@ own ffmpeg (`rshot-ffmpeg`; see `THIRD_PARTY.md`, installed with rshot), so noth
 Turn off **Settings → Take over system screenshot shortcuts**, or:
 
 - **Linux:** run `rshot restore-shortcuts`. While rshot is running, the running app does the restore; if it fails,
-  it says so in a notification. Uninstalling the `.deb` or `.rpm` does this for every logged-in user.
+  it says so in a notification. Uninstalling the `.deb` or `.rpm` does this for every logged-in user. The AppImage
+  has no uninstaller: before deleting it, turn the takeover off or run `./rshot_<v>_amd64.AppImage restore-shortcuts`.
 - **Windows:** uninstalling rshot does it (the uninstaller closes rshot first). By hand: quit rshot from the tray,
   then run `"%LOCALAPPDATA%\rshot\rshot.exe" restore-shortcuts`.
 - **macOS:** dragging rshot to the Trash runs nothing, so before that: quit rshot from the menu bar, run
@@ -101,8 +102,10 @@ Automatic takeover works on GNOME. Elsewhere, bind `rshot capture area|screen|wi
 
 ## Owner smoke test (Windows and macOS)
 
-The Windows and macOS builds are compiled and packaged by CI but were never run by the implementer. Run the manual
-checklist in the design spec (§6) on each, plus:
+The Windows and macOS builds are compiled and packaged by CI but were never run by the implementer. First, before the
+first `v*` tag, run `release.yml` once from the Actions tab (`workflow_dispatch`): it exercises the NSIS hook, `lipo`
+and the `.dmg`, the Git Bash tools (`unzip`, `shasum`) and the AppImage on Ubuntu 22.04, and returns the installers as
+workflow artifacts. Then run the manual checklist in the design spec (§6) on each OS, plus:
 
 - **Windows:**
   - Installer: per-user install without admin, the WebView2 bootstrapper on a machine without WebView2; uninstall
@@ -113,6 +116,10 @@ checklist in the design spec (§6) on each, plus:
     awareness; `ddagrab` is the fallback).
   - The microphone list: BtbN n8.1's dshow `"name" (audio)` lines.
   - The trimmer plays the loopback video stream (WebView2 Local Network Access).
+  - Left-clicking the tray icon stops a recording.
+  - Quit gives PrtScn and Win+Shift+S back to Windows; starting rshot again takes them again.
+  - Holding PrtScn down captures once, not once per key repeat.
+  - Killing `rshot.exe` (Task Manager) mid-recording stops its ffmpeg too (Job object).
 - **macOS:**
   - The universal `.dmg` on Apple silicon and Intel; `xattr`; Screen Recording and Microphone prompts, and after an
     update.
@@ -127,6 +134,9 @@ checklist in the design spec (§6) on each, plus:
   - avfoundation recordings: "Capture screen N" order and frame size against rshot's screen list and image sizes
     (Retina), and whether `AVCaptureScreenInput` still works on current macOS.
   - Whether the firewall prompts when rshot's loopback video server listens; the trimmer plays the video (ATS).
+  - Left-clicking the menu bar icon stops a recording.
+  - Quit gives ⌘⇧3/4/5 back to macOS; starting rshot again takes them again.
+  - The microphone, saved by name, is still found after unplugging and replugging it.
 
 ## Develop
 

@@ -32,7 +32,7 @@ jobs:
           get x264-0480cb05.tar.gz https://code.videolan.org/videolan/x264/-/archive/0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee/x264-0480cb05fa188d37ae87e8f4fd8f1aea3711f7ee.tar.gz
       - id: release
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           draft: true
           name: rshot ${{ github.ref_name }}
@@ -81,12 +81,13 @@ jobs:
         run: scripts/fetch-ffmpeg.sh
       - run: npm ci
       - name: Build installers
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: --target ${{ matrix.target }}
           releaseId: ${{ needs.create-release.outputs.id }}
+          includeUpdaterJson: false
       - name: Upload installers (manual runs)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4

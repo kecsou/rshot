@@ -1,9 +1,11 @@
 #!/bin/sh
-# Give the screenshot shortcuts back to GNOME for every logged-in user (best effort).
+# Give the screenshot shortcuts back to GNOME for every logged-in user (best effort), on removal only.
+# The .deb's prerm and the .rpm's %preun: dpkg passes remove/purge (upgrade falls through), rpm passes
+# 0 on erase (1 on upgrade falls through).
 # Users who weren't logged in can do it by hand: see "Give the shortcuts back" in the README.
 set -e
 case "$1" in
-  remove|purge)
+  remove|purge|0)
     for uid in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $1}'); do
       user=$(id -nu "$uid" 2>/dev/null) || continue
       home=$(getent passwd "$user" | cut -d: -f6)

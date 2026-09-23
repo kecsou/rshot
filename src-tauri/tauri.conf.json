@@ -43,7 +43,7 @@
       "rpm": {
         "depends": ["pipewire-libs", "mesa-libgbm"],
         "recommends": ["gstreamer1-plugin-openh264"],
-        "preRemoveScript": "rpm/preun.sh"
+        "preRemoveScript": "deb/prerm.sh"
       },
       "appimage": { "bundleMediaFramework": true }
     }

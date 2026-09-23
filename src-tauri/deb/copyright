@@ -7,7 +7,7 @@ Files: *
 Copyright: 2026 kecsou
 License: MIT
 
-Files: usr/bin/rshot-ffmpeg
+Files: src-tauri/binaries/*
 Copyright: 2000-2026 the FFmpeg developers, and the authors of the libraries linked into this build
 License: GPL-3+
 Comment: An unmodified static FFmpeg build (BtbN FFmpeg-Builds, autobuild-2026-08-31-13-27,
