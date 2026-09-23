@@ -352,9 +352,8 @@ mod tests {
     fn dir_setting_maps_the_default_folder_to_none() {
         let default = screenshots_dir(&Config::default());
         assert_eq!(dir_setting(&default.display().to_string()), None);
-        assert_eq!(
-            dir_setting("/data/shots"),
-            Some(PathBuf::from("/data/shots"))
-        );
+        // Absolute on every platform ("/data/shots" isn't on Windows).
+        let abs = std::env::temp_dir().join("shots");
+        assert_eq!(dir_setting(&abs.display().to_string()), Some(abs));
     }
 }
