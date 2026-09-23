@@ -39,7 +39,8 @@ bin=$(echo "$tmp"/ffmpeg-*/bin/ffmpeg)
 "$bin" -hide_banner -devices 2>/dev/null | grep -q x11grab || { echo "sidecar lacks x11grab" >&2; exit 1; }
 "$bin" -hide_banner -devices 2>/dev/null | grep -q pulse || { echo "sidecar lacks pulse" >&2; exit 1; }
 "$bin" -hide_banner -encoders 2>/dev/null | grep -q libx264 || { echo "sidecar lacks libx264" >&2; exit 1; }
-cp "$tmp"/ffmpeg-*/LICENSE.txt "$lic"
+cp "$tmp"/ffmpeg-*/LICENSE.txt "$lic.part"
+mv "$lic.part" "$lic"
 cp "$bin" "$out.part"
 chmod +x "$out.part"
 mv "$out.part" "$out"

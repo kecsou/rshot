@@ -11,4 +11,5 @@ and trimming. FFmpeg is licensed under the GNU GPL v3 (this build enables GPL co
   tag `n8.1.2`: https://github.com/FFmpeg/FFmpeg/commit/1a748fe2cd43e3ead22fafb1b5b7d77f153898a8), build scripts
   at the commit that made this release:
   https://github.com/BtbN/FFmpeg-Builds/tree/8267213e26c1031621e6e1210fe3aa4867214f6a
-- License text: `FFMPEG-LICENSE.txt` (the build's `LICENSE.txt`), installed next to this file.
+- License text: `FFMPEG-LICENSE.txt` (the build's `LICENSE.txt`), installed next to this file in `/usr/lib/rshot/`;
+  fetched to `src-tauri/binaries/` in a checkout.

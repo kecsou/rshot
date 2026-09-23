@@ -27,7 +27,7 @@ Settings live in the tray menu and in `~/.config/rshot/config.toml`.
 countdown → recording. Stop with the pill's **Stop**, the tray's **Stop Recording**, or the same shortcut again.
 Recordings are saved as `~/Videos/Screencasts/Recording_YYYY-MM-DD_HH-MM-SS.mp4` (H.264, optional microphone),
 their path is copied, and clicking the thumbnail opens a trimmer. rshot ships its own ffmpeg (`rshot-ffmpeg`; see
-`THIRD_PARTY.md`), so nothing else needs installing.
+`/usr/lib/rshot/THIRD_PARTY.md`), so nothing else needs installing.
 
 ## Give the shortcuts back
 
@@ -69,7 +69,7 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev lib
   librsvg2-dev libpipewire-0.3-dev libspa-0.2-dev clang libclang-dev libgbm-dev libdrm-dev libwayland-dev \
   libxcb1-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-xfixes0-dev
 npm ci
-scripts/fetch-ffmpeg.sh  # once: downloads the bundled ffmpeg sidecar
+scripts/fetch-ffmpeg.sh  # the ffmpeg sidecar: after cloning and whenever the pinned build changes (idempotent)
 npm run tauri dev        # run
 npm test                 # frontend unit tests
 (cd src-tauri && cargo test)
