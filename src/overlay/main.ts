@@ -249,6 +249,20 @@ addEventListener('keydown', (e) => {
   }
 });
 
+// A mouse click neither focuses a button nor keeps focus on the last control, so Space and the
+// arrows stay the overlay's (a Tab-focused button still takes Space). The select needs focus to open.
+for (const el of [bar, q('#pop')]) {
+  el.addEventListener(
+    'mousedown',
+    (e) => {
+      if (!(e.target as Element).closest('button')) return;
+      e.preventDefault();
+      (document.activeElement as HTMLElement | null)?.blur();
+    },
+    true,
+  );
+}
+
 bar.addEventListener('click', (e) => {
   const b = (e.target as Element).closest<HTMLButtonElement>('button');
   if (!b || b.disabled) return;
