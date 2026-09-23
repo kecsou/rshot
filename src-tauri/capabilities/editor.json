@@ -3,5 +3,5 @@
   "identifier": "editor",
   "description": "Image and video editor windows",
   "windows": ["editor-*"],
-  "permissions": ["allow-editor-info", "allow-read-capture", "allow-save-image", "allow-retry-copy", "allow-editor-delete", "allow-trim-video", "allow-copy-path", "allow-reveal-capture", "allow-close-window"]
+  "permissions": ["allow-editor-info", "allow-read-capture", "allow-save-image", "allow-retry-copy", "allow-editor-delete", "allow-trim-video", "allow-copy-path", "allow-reveal-capture", "allow-close-window", "core:event:allow-listen"]
 }

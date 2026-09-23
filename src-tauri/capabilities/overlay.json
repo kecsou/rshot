@@ -3,5 +3,5 @@
   "identifier": "overlay",
   "description": "Capture overlays (one per monitor)",
   "windows": ["overlay-*"],
-  "permissions": ["allow-overlay-info", "allow-overlay-frame", "allow-overlay-ready", "allow-overlay-activate", "allow-overlay-cancel", "allow-overlay-capture", "allow-overlay-record", "allow-set-overlay-options", "allow-pick-folder", "allow-list-mics"]
+  "permissions": ["allow-overlay-info", "allow-overlay-frame", "allow-overlay-ready", "allow-overlay-activate", "allow-overlay-cancel", "allow-overlay-capture", "allow-overlay-record", "allow-set-overlay-options", "allow-pick-folder", "allow-list-mics", "core:event:allow-listen", "core:event:allow-emit"]
 }
