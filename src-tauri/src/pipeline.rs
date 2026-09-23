@@ -1,6 +1,6 @@
 //! What happens after pixels are chosen: PNG, atomic save, clipboard, sound, feedback.
 
-use crate::{capture, err, store, store::Config, AppState};
+use crate::{capture, store, store::Config, AppState};
 use image::RgbaImage;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
@@ -89,8 +89,7 @@ pub fn capture_screen_now(app: &AppHandle) -> Result<(), String> {
     let show_pointer = app.state::<AppState>().config.lock().unwrap().show_pointer;
     let frames = capture::grab_all(show_pointer)?;
     drop(hidden);
-    let pos = app.cursor_position().map_err(err)?;
-    let i = capture::frame_at(&frames, pos.x as i32, pos.y as i32);
+    let i = crate::ui::frame_under_cursor(app, &frames)?;
     let frame = frames.into_iter().nth(i).ok_or("no monitor found")?;
     finish_capture(app, frame.image).map(|_| ())
 }

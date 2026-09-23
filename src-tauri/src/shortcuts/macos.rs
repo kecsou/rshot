@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[cfg(target_os = "macos")]
-pub use sys::{init, release, restore, take_over};
+pub use sys::{init, pause, release, restore, take_over};
 
 /// (symbolic hotkey id, ASCII, virtual key code, modifier mask) of ⌘⇧3, ⌃⌘⇧3, ⌘⇧4, ⌃⌘⇧4, ⌘⇧5:
 /// the system's own parameters, written back with each enabled bit.
@@ -37,19 +37,28 @@ fn entry(enabled: bool, (_, ascii, vk, mods): (u32, u32, u32, u32)) -> String {
     )
 }
 
-/// A hotkey's state from `plutil -extract AppleSymbolicHotKeys.<id>.enabled raw`; `None` (no
-/// entry: never changed) is macOS's default, on.
-fn is_enabled(plutil: Option<&str>) -> bool {
-    !matches!(plutil.map(str::trim), Some("false" | "0"))
+/// Whether hotkey `id` is on in the symbolic-hotkeys domain (`defaults export`, as JSON). No entry
+/// (never changed, or the domain unreadable) is macOS's default, on; the value may be a bool, a
+/// number or, written old-style by `defaults`, a string.
+fn is_enabled(domain: &serde_json::Value, id: u32) -> bool {
+    use serde_json::Value;
+    match &domain["AppleSymbolicHotKeys"][id.to_string()]["enabled"] {
+        Value::Bool(on) => *on,
+        Value::Number(n) => n.as_i64() != Some(0),
+        Value::String(s) => s != "0",
+        _ => true,
+    }
 }
 
-/// What the backup holds before rshot switches the hotkey off: its state now, which is the user's
-/// choice (even one made after a Quit gave it back), unless it is off while a backup exists:
-/// rshot's own off, left by this or a crashed session, so the backup stays.
+/// What the backup holds before rshot switches the hotkey off: on ("1"), the user's choice when it
+/// is on now (even after a Quit gave it back), unless it is off while a backup exists: rshot's own
+/// off, left by this or a crashed session, so the backup stays. Off with no backup may be rshot's
+/// too, its backup lost with config.toml: on is the safe guess, a dead ⌘⇧3 being worse than the
+/// system's.
 fn backup(kept: Option<&str>, now_enabled: bool) -> String {
     match kept {
         Some(kept) if !now_enabled => kept.to_string(),
-        _ => u8::from(now_enabled).to_string(),
+        _ => "1".into(),
     }
 }
 
@@ -176,7 +185,13 @@ mod sys {
         err, pipeline,
         store::{self, Config},
     };
-    use std::{process::Command, sync::OnceLock};
+    use std::{
+        process::Command,
+        sync::{
+            atomic::{AtomicBool, AtomicU64, Ordering},
+            Mutex, MutexGuard, OnceLock, PoisonError,
+        },
+    };
     use tauri::AppHandle;
     use tauri_plugin_global_shortcut::{
         Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
@@ -184,6 +199,29 @@ mod sys {
 
     /// The daemon's handle, for the global shortcuts; unset in a CLI `restore-shortcuts`.
     static APP: OnceLock<AppHandle> = OnceLock::new();
+
+    /// What rshot registers while it holds the keys, and the hotkey bits a failed registration
+    /// puts back.
+    struct Taken {
+        gen: u64,
+        wanted: Vec<(Combo, Cmd)>,
+        back: Vec<(u32, bool)>,
+    }
+
+    /// Set by `take_over`; cleared by `release` and by a failed registration.
+    static TAKEN: Mutex<Option<Taken>> = Mutex::new(None);
+    /// Settings is recording a new shortcut: rshot's are unregistered meanwhile, so the keys reach
+    /// it (the system's hotkeys stay off).
+    static PAUSED: AtomicBool = AtomicBool::new(false);
+    /// Held while the system's hotkeys are written, so a failed registration's rollback can't land
+    /// after a newer takeover switched them off.
+    static WRITING: Mutex<()> = Mutex::new(());
+    /// Bumped by each takeover and release: a rollback of an older one is stale.
+    static GEN: AtomicU64 = AtomicU64::new(0);
+
+    fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+        m.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 
     pub fn init(app: AppHandle) {
         let _ = APP.set(app);
@@ -209,16 +247,19 @@ mod sys {
         }
     }
 
-    fn read_enabled(id: u32) -> bool {
-        let plist = dirs::home_dir()
+    /// The symbolic-hotkeys domain as JSON, read through cfprefsd (the plist on disk can lag
+    /// behind it); `Null` when unreadable.
+    fn read_hotkeys() -> serde_json::Value {
+        const EXPORT: &str = "/usr/bin/defaults export com.apple.symbolichotkeys - \
+                              | /usr/bin/plutil -convert json -o - -";
+        run("/bin/sh", &["-c", EXPORT])
+            .ok()
+            .and_then(|json| serde_json::from_str(&json).ok())
             .unwrap_or_default()
-            .join("Library/Preferences/com.apple.symbolichotkeys.plist");
-        let key = format!("AppleSymbolicHotKeys.{id}.enabled");
-        let args = ["-extract", &key, "raw", "-o", "-", &plist.to_string_lossy()];
-        is_enabled(run("/usr/bin/plutil", &args).ok().as_deref())
     }
 
-    /// Writes the enabled bit of each listed hotkey, then makes the change live.
+    /// Writes the enabled bit of each listed hotkey, then makes the change live. Callers hold
+    /// `WRITING`.
     fn set_system(bits: &[(u32, bool)]) -> Result<(), String> {
         for &(id, on) in bits {
             let Some(&hotkey) = SYSTEM.iter().find(|s| s.0 == id) else {
@@ -241,16 +282,17 @@ mod sys {
     }
 
     /// Refuses, touching nothing, when a shortcut can't be taken. The system's hotkeys go off here;
-    /// the global shortcuts are registered on the main thread just after (a failure there puts the
-    /// system's back and says so).
+    /// rshot's are registered on the main thread just after (`sync`).
     pub fn take_over(cfg: &mut Config) -> Result<(), String> {
         let wanted = bindings(&cfg.shortcuts)?;
-        let app = APP.get().ok_or("rshot isn't running")?.clone();
+        let app = APP.get().ok_or("rshot isn't running")?;
+        let _writing = lock(&WRITING);
+        let now = read_hotkeys();
         let kept = cfg.gnome_backup.get_or_insert_with(Default::default);
         let mut changed = false;
         for (id, ..) in SYSTEM {
             let k = backup_key(id);
-            let v = backup(kept.get(&k).map(String::as_str), read_enabled(id));
+            let v = backup(kept.get(&k).map(String::as_str), is_enabled(&now, id));
             if kept.get(&k) != Some(&v) {
                 kept.insert(k, v);
                 changed = true;
@@ -260,27 +302,94 @@ mod sys {
             // The originals reach disk before the first change, so a crash can still restore them.
             store::save_config(cfg).map_err(|e| format!("saving shortcut backup: {e}"))?;
         }
+        let gen = GEN.fetch_add(1, Ordering::SeqCst) + 1;
         set_system(&SYSTEM.map(|s| (s.0, false)))?;
-        let back = originals(cfg);
-        // Registering waits for the main thread, and the caller holds `config`: posted, never
-        // waited for (main.rs lock rule). From setup, on the main thread, it runs right here.
+        *lock(&TAKEN) = Some(Taken {
+            gen,
+            wanted,
+            back: originals(cfg),
+        });
+        post_sync(app)
+    }
+
+    /// rshot's shortcuts off and the system's hotkeys back as backed up; the backup (and the
+    /// consent) stay.
+    pub fn release(cfg: &Config) -> Result<(), String> {
+        let _writing = lock(&WRITING);
+        GEN.fetch_add(1, Ordering::SeqCst);
+        *lock(&TAKEN) = None;
+        if let Some(app) = APP.get() {
+            // Posting fails only once the event loop is gone, and the shortcuts with it.
+            let _ = post_sync(app);
+        }
+        set_system(&originals(cfg))
+    }
+
+    pub fn restore(cfg: &mut Config) -> Result<(), String> {
+        release(cfg)?;
+        if let Some(b) = &mut cfg.gnome_backup {
+            b.retain(|k, _| !k.starts_with("mac:"));
+            if b.is_empty() {
+                cfg.gnome_backup = None;
+            }
+        }
+        Ok(())
+    }
+
+    /// Settings records a new shortcut (`on`) or is done: rshot's own shortcuts go and come back.
+    pub fn pause(on: bool) {
+        PAUSED.store(on, Ordering::SeqCst);
+        if let Some(app) = APP.get() {
+            // As in `release`.
+            let _ = post_sync(app);
+        }
+    }
+
+    /// Brings the registered shortcuts in line with `TAKEN` and `PAUSED` on the main thread (Text
+    /// Input Sources and the plugin need it). Posted, never waited for: callers may hold `config`
+    /// (main.rs lock rule). On the main thread (setup, Quit, Settings) it runs right here. Each run
+    /// reads the state as it is then, so the last change wins.
+    fn post_sync(app: &AppHandle) -> Result<(), String> {
         let a = app.clone();
-        app.run_on_main_thread(move || {
-            if let Err(e) = register(&a, &wanted) {
-                // Half a set is no use: the system's own hotkeys come back instead.
-                let _ = a.global_shortcut().unregister_all();
-                pipeline::notify(
-                    &a,
-                    &format!("rshot couldn't take the screenshot shortcuts ({e}); the system's are back."),
-                );
+        app.run_on_main_thread(move || sync(&a)).map_err(err)
+    }
+
+    fn sync(app: &AppHandle) {
+        let now = lock(&TAKEN)
+            .as_ref()
+            .filter(|_| !PAUSED.load(Ordering::SeqCst))
+            .map(|t| (t.gen, t.wanted.clone()));
+        let gs = app.global_shortcut();
+        let Some((gen, wanted)) = now else {
+            if let Err(e) = gs.unregister_all() {
+                pipeline::notify(app, &format!("Releasing rshot's shortcuts: {e}"));
+            }
+            return;
+        };
+        if let Err(e) = register(app, &wanted) {
+            // Half a set is no use: the system's own hotkeys come back instead.
+            let _ = gs.unregister_all();
+            pipeline::notify(
+                app,
+                &format!(
+                    "rshot couldn't take the screenshot shortcuts ({e}); the system's are back."
+                ),
+            );
+            let failed = lock(&TAKEN).take_if(|t| t.gen == gen);
+            if let Some(t) = failed {
+                let a = app.clone();
                 std::thread::spawn(move || {
-                    if let Err(e) = set_system(&back) {
+                    let _writing = lock(&WRITING);
+                    // A takeover or release since has set the system's hotkeys its own way.
+                    if GEN.load(Ordering::SeqCst) != gen {
+                        return;
+                    }
+                    if let Err(e) = set_system(&t.back) {
                         pipeline::notify(&a, &format!("Putting the system's shortcuts back: {e}"));
                     }
                 });
             }
-        })
-        .map_err(err)
+        }
     }
 
     /// Main thread only: Text Input Sources (the layout) require it, and the plugin would wait on it.
@@ -305,33 +414,6 @@ mod sys {
                 }
             })
             .map_err(err)?;
-        }
-        Ok(())
-    }
-
-    /// Global shortcuts off and the system's hotkeys back as backed up; the backup (and the
-    /// consent) stay.
-    pub fn release(cfg: &Config) -> Result<(), String> {
-        if let Some(app) = APP.get() {
-            let a = app.clone();
-            // Posted, not waited for (the caller holds `config`). Posting fails only once the
-            // event loop is gone, and the shortcuts with it.
-            let _ = app.run_on_main_thread(move || {
-                if let Err(e) = a.global_shortcut().unregister_all() {
-                    pipeline::notify(&a, &format!("Releasing rshot's shortcuts: {e}"));
-                }
-            });
-        }
-        set_system(&originals(cfg))
-    }
-
-    pub fn restore(cfg: &mut Config) -> Result<(), String> {
-        release(cfg)?;
-        if let Some(b) = &mut cfg.gnome_backup {
-            b.retain(|k, _| !k.starts_with("mac:"));
-            if b.is_empty() {
-                cfg.gnome_backup = None;
-            }
         }
         Ok(())
     }
@@ -374,8 +456,10 @@ mod sys {
         const DISPLAY: u16 = 3; // kUCKeyActionDisplay
         const NO_DEAD_KEYS: u32 = 1; // kUCKeyTranslateNoDeadKeysMask
         let mut out = vec![];
-        // SAFETY: the calls as documented (and as tao makes them): the source is released once,
-        // its layout data is read only while the source is held, and the buffers outlive each call.
+        // SAFETY: the calls as documented (and as tao makes them), on the main thread, which Text
+        // Input Sources require (`register` runs only there; macOS 14+ asserts otherwise): the
+        // source is released once, its layout data is read only while the source is held, and the
+        // buffers outlive each call.
         unsafe {
             let source = TISCopyCurrentKeyboardLayoutInputSource();
             if source.is_null() {
@@ -516,22 +600,36 @@ mod tests {
     }
 
     #[test]
-    fn plutil_output_reads_as_on_unless_off() {
-        assert!(is_enabled(None)); // no entry: never changed
-        assert!(is_enabled(Some("true\n")));
-        assert!(is_enabled(Some("1")));
-        assert!(!is_enabled(Some("false\n")));
-        assert!(!is_enabled(Some("0"))); // written as an old-style string
+    fn exported_hotkeys_read_as_on_unless_off() {
+        let domain: serde_json::Value = serde_json::from_str(
+            r#"{"AppleSymbolicHotKeys": {
+                "28": {"enabled": false, "value": {"parameters": [51, 20, 1179648], "type": "standard"}},
+                "29": {"enabled": true},
+                "30": {"enabled": 0},
+                "31": {"enabled": "0"},
+                "184": {"enabled": 1},
+                "64": {"enabled": false}
+            }}"#,
+        )
+        .unwrap();
+        assert!(!is_enabled(&domain, 28));
+        assert!(is_enabled(&domain, 29));
+        assert!(!is_enabled(&domain, 30));
+        assert!(!is_enabled(&domain, 31)); // written old-style by `defaults`: a string
+        assert!(is_enabled(&domain, 184));
+        assert!(is_enabled(&domain, 60)); // no entry: never changed
+        assert!(is_enabled(&serde_json::Value::Null, 28)); // domain unreadable
     }
 
     #[test]
-    fn the_backup_follows_the_users_state_but_never_takes_rshots_off() {
+    fn the_backup_is_on_unless_rshots_off_already_has_one() {
         assert_eq!(backup(None, true), "1"); // first takeover
-        assert_eq!(backup(None, false), "0"); // the user's own off
         assert_eq!(backup(Some("1"), false), "1"); // rshot's off (still taken, or a crash)
         assert_eq!(backup(Some("0"), false), "0");
         // Changed by the user while rshot wasn't holding it (after a Quit): theirs now.
         assert_eq!(backup(Some("0"), true), "1");
+        // Off with no backup: maybe rshot's own, its backup lost with config.toml: the default.
+        assert_eq!(backup(None, false), "1");
     }
 
     #[test]

@@ -99,10 +99,12 @@ pub fn release(_cfg: &Config) -> Result<(), String> {
 }
 
 /// Settings is recording a new shortcut: rshot's own keys must reach it (Windows' hook lets them
-/// through meanwhile).
+/// through meanwhile, macOS unregisters its global shortcuts).
 pub fn pause(on: bool) {
     #[cfg(target_os = "windows")]
     windows::pause(on);
+    #[cfg(target_os = "macos")]
+    macos::pause(on);
     let _ = on;
 }
 

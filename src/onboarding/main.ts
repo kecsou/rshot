@@ -11,9 +11,14 @@ const rows: [string, string][] = [
   ['Capture window', s.shortcuts.window],
   ['Record screen', s.shortcuts.record],
 ];
-// Taken too, and not rebindable: PrtScn on Windows, ⌘⇧5 on macOS.
-const wired = ({ windows: 'Print', macos: 'Super+Shift+5' } as Record<string, string>)[s.platform];
-if (wired) rows.splice(1, 0, ['Capture area (with toolbar)', wired]);
+// Taken too, and not rebindable.
+const wired = (
+  {
+    windows: ['Capture area (PrtScn)', 'Print'],
+    macos: ['Capture options (⌘⇧5)', 'Super+Shift+5'],
+  } as Record<string, [string, string]>
+)[s.platform];
+if (wired) rows.splice(1, 0, wired);
 const keys = document.querySelector<HTMLElement>('#keys')!;
 for (const [label, key] of rows) {
   const row = document.createElement('div');

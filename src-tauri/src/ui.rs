@@ -465,25 +465,55 @@ pub fn ensure_overlays(app: &AppHandle) -> tauri::Result<()> {
 pub fn place_overlays(app: &AppHandle, frames: &[Frame]) -> Result<(), String> {
     for (i, f) in frames.iter().enumerate() {
         let w = overlay_window(app, i).map_err(err)?;
-        let pos = PhysicalPosition::new(f.x, f.y);
-        // Simple fullscreen: a borderless window over the menu bar, with no Space of its own and
-        // no animation. `hide_overlays` leaves it, or the menu bar and Dock would stay hidden.
+        // In points, as xcap has them: a physical position or size would be converted with the
+        // scale of the screen the window is on now, not the target's. Simple fullscreen comes once
+        // the page shows it (`enter_simple_fullscreen`).
         #[cfg(target_os = "macos")]
         {
-            w.set_position(pos).map_err(err)?;
-            w.set_size(PhysicalSize::new(f.image.width(), f.image.height()))
+            let (x, y) = (f64::from(f.x) / f.scale, f64::from(f.y) / f.scale);
+            let (fw, fh) = (f64::from(f.image.width()), f64::from(f.image.height()));
+            w.set_position(tauri::LogicalPosition::new(x, y))
                 .map_err(err)?;
-            w.set_simple_fullscreen(true).map_err(err)?;
+            w.set_size(tauri::LogicalSize::new(fw / f.scale, fh / f.scale))
+                .map_err(err)?;
         }
         #[cfg(not(target_os = "macos"))]
-        if w.outer_position().ok() != Some(pos) || !w.is_fullscreen().unwrap_or(false) {
-            w.set_fullscreen(false).map_err(err)?;
-            w.set_position(pos).map_err(err)?;
-            w.set_size(PhysicalSize::new(f.image.width(), f.image.height()))
-                .map_err(err)?;
-            w.set_fullscreen(true).map_err(err)?;
+        {
+            let pos = PhysicalPosition::new(f.x, f.y);
+            if w.outer_position().ok() != Some(pos) || !w.is_fullscreen().unwrap_or(false) {
+                w.set_fullscreen(false).map_err(err)?;
+                w.set_position(pos).map_err(err)?;
+                w.set_size(PhysicalSize::new(f.image.width(), f.image.height()))
+                    .map_err(err)?;
+                w.set_fullscreen(true).map_err(err)?;
+            }
         }
     }
+    Ok(())
+}
+
+/// macOS: the overlays in simple fullscreen, in the order they entered. tao saves the app's
+/// presentation options (Dock and menu bar shown) when a window enters and puts them back when it
+/// leaves, so they must leave in reverse order, or the Dock and menu bar stay hidden for good.
+#[cfg(target_os = "macos")]
+static SIMPLE_FULLSCREEN: std::sync::Mutex<Vec<WebviewWindow>> = std::sync::Mutex::new(Vec::new());
+
+/// macOS: puts a shown overlay in simple fullscreen, a borderless window over the menu bar with no
+/// Space of its own and no animation, on the screen it was placed on. Only once shown: tao reads
+/// the window's screen at once (and unwraps it), which a never-shown window may not have, and its
+/// move may not have landed before. `hide_overlays` leaves it. No-op elsewhere.
+pub fn enter_simple_fullscreen(w: &WebviewWindow) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut entered = SIMPLE_FULLSCREEN
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !entered.iter().any(|e| e.label() == w.label()) {
+            w.set_simple_fullscreen(true).map_err(err)?;
+            entered.push(w.clone());
+        }
+    }
+    let _ = w;
     Ok(())
 }
 
@@ -491,9 +521,16 @@ pub fn hide_overlays(app: &AppHandle) {
     for (label, w) in app.webview_windows() {
         if label.starts_with("overlay-") {
             let _ = w.hide();
-            #[cfg(target_os = "macos")]
-            let _ = w.set_simple_fullscreen(false);
         }
+    }
+    #[cfg(target_os = "macos")]
+    for w in SIMPLE_FULLSCREEN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .drain(..)
+        .rev()
+    {
+        let _ = w.set_simple_fullscreen(false);
     }
     let _ = app.emit("overlay:hide", ());
     // After the overlays: a recording's frame and pill come back, but never over a frozen frame.
@@ -684,6 +721,28 @@ pub fn popup(
         .inner_size(w, h)
         .build()
         .map_err(err)
+}
+
+/// Index of the frame under the pointer. macOS compares in points: tao's cursor is points × the
+/// primary monitor's scale, each frame × its own.
+pub fn frame_under_cursor(app: &AppHandle, frames: &[Frame]) -> Result<usize, String> {
+    let pos = app.cursor_position().map_err(err)?;
+    #[cfg(target_os = "macos")]
+    {
+        let s = app
+            .primary_monitor()
+            .map_err(err)?
+            .map_or(1.0, |m| m.scale_factor());
+        Ok(crate::capture::frame_at_points(
+            frames,
+            pos.x / s,
+            pos.y / s,
+        ))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(crate::capture::frame_at(frames, pos.x as i32, pos.y as i32))
+    }
 }
 
 /// The monitor containing a desktop point in physical px (the cursor, a region), else the primary.

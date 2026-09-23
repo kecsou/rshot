@@ -103,8 +103,7 @@ pub fn start(app: &AppHandle, mode: &str) -> Result<(), String> {
         frames.len(),
         started.elapsed().as_millis()
     );
-    let pos = app.cursor_position().map_err(err)?;
-    let active = capture::frame_at(&frames, pos.x as i32, pos.y as i32);
+    let active = ui::frame_under_cursor(app, &frames)?;
     ui::place_overlays(app, &frames)?;
     let token = state.next_token.fetch_add(1, Ordering::Relaxed);
     // Until the overlays hide (cancel, capture, record), a recording's frame and pill stay hidden.
@@ -200,6 +199,7 @@ pub fn overlay_ready(
     let index = ui::overlay_index(window.label()).ok_or("not an overlay")?;
     window.set_focusable(index == s.active).map_err(err)?;
     window.show().map_err(err)?;
+    ui::enter_simple_fullscreen(&window)?;
     if index == s.active {
         window.set_focus().map_err(err)?;
         #[cfg(target_os = "linux")]

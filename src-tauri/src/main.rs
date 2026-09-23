@@ -168,7 +168,8 @@ fn main() {
             }
         })
         .setup(move |app| {
-            // No Dock icon: rshot lives in the menu bar.
+            // No Dock icon: rshot lives in the menu bar. Info.plist's LSUIElement says so before
+            // launch (no Dock flash); this covers a binary run outside the bundle.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             ui::create_tray(app.handle())?;

@@ -84,7 +84,7 @@ export const openConfig = () => invoke<void>('open_config');
 export const closeWindow = () => invoke<void>('close_window');
 /** macOS: the Screen Recording prompt (first time), then System Settings' pane. */
 export const requestScreenPermission = () => invoke<void>('request_screen_permission');
-/** While Settings records a shortcut, rshot's own keys reach it (Windows' keyboard hook lets them through). */
+/** While Settings records a shortcut, rshot's own keys reach it (Windows' keyboard hook lets them through, macOS drops its global shortcuts). */
 export const setRebinding = (on: boolean) => invoke<void>('set_rebinding', { on });
 
 /** `stream`: a video editor's loopback URL for its file (null for an image). */

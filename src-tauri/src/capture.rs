@@ -84,7 +84,8 @@ pub fn to_px(v: i32, scale: f64) -> i32 {
     (f64::from(v) * scale).round() as i32
 }
 
-/// Index of the frame containing the desktop point, or 0.
+/// Index of the frame containing the desktop point, or 0 (macOS: `frame_at_points`).
+#[cfg(any(not(target_os = "macos"), test))]
 pub fn frame_at(frames: &[Frame], px: i32, py: i32) -> usize {
     rect_at(
         frames
@@ -94,6 +95,22 @@ pub fn frame_at(frames: &[Frame], px: i32, py: i32) -> usize {
         py,
     )
     .unwrap_or(0)
+}
+
+/// macOS: the frame under a point in xcap units (points), each frame taken back to points with its
+/// own scale, or 0. tao's cursor is points × the primary monitor's scale, while each frame is ×
+/// its own: on mixed-scale monitors only points compare.
+#[cfg(any(target_os = "macos", test))]
+pub fn frame_at_points(frames: &[Frame], x: f64, y: f64) -> usize {
+    frames
+        .iter()
+        .position(|f| {
+            let (fx, fy) = (f64::from(f.x) / f.scale, f64::from(f.y) / f.scale);
+            let fw = f64::from(f.image.width()) / f.scale;
+            let fh = f64::from(f.image.height()) / f.scale;
+            x >= fx && y >= fy && x < fx + fw && y < fy + fh
+        })
+        .unwrap_or(0)
 }
 
 /// Index of the first `(x, y, w, h)` rect containing the point (same units, e.g. physical px).
@@ -199,15 +216,23 @@ mod permission {
         unsafe { CGPreflightScreenCaptureAccess() }
     }
 
-    /// macOS asks once (a prompt); after that only System Settings can grant it, so open it there.
+    /// Whether this launch has asked already.
+    static ASKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    /// macOS asks once ever (its prompt, which links to System Settings): the first request of a
+    /// launch only asks, so a first-time user doesn't get the prompt and the pane together. Asked
+    /// again and still denied, only System Settings can grant it: open it there.
     pub fn request() {
         // SAFETY: no arguments; shows the system prompt the first time only.
-        unsafe {
-            CGRequestScreenCaptureAccess();
+        let granted = unsafe { CGRequestScreenCaptureAccess() };
+        let again = ASKED.swap(true, std::sync::atomic::Ordering::SeqCst);
+        if !granted && again {
+            let _ = std::process::Command::new("/usr/bin/open")
+                .arg(
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+                )
+                .status();
         }
-        let _ = std::process::Command::new("/usr/bin/open")
-            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
-            .status();
     }
 }
 
@@ -302,6 +327,19 @@ mod tests {
         assert_eq!(to_px(1440, 2.0), 2880);
         assert_eq!(to_px(-900, 2.0), -1800);
         assert_eq!(to_px(101, 1.5), 152); // rounded, not truncated
+    }
+
+    #[test]
+    fn a_point_finds_its_frame_across_scales() {
+        // A 1920×1080 non-Retina primary, then a 1440×900-point Retina monitor to its right: in
+        // physical px it starts at 1920 × 2 = 3840 (its own scale), leaving a gap.
+        let mut retina = frame(3840, 0, 2880, 1800);
+        retina.scale = 2.0;
+        let fs = [frame(0, 0, 1920, 1080), retina];
+        assert_eq!(frame_at_points(&fs, 100.0, 100.0), 0);
+        assert_eq!(frame_at_points(&fs, 2000.0, 100.0), 1); // physical 2000 would miss both
+        assert_eq!(frame_at_points(&fs, 3359.0, 899.0), 1);
+        assert_eq!(frame_at_points(&fs, 3360.0, 100.0), 0); // past its right edge: the default
     }
 
     #[test]
