@@ -212,6 +212,17 @@ $('#copy').addEventListener('click', () => void copy());
 $('#close').addEventListener('click', () => void requestClose());
 $('#reveal').addEventListener('click', () => void ipc.revealCapture(info.path));
 $('#delete').addEventListener('click', () => void remove());
+// A mouse click neither focuses a button nor leaves focus on the last control, so Enter and Space
+// stay the page's (as in the overlay); a Tab-focused button still takes them. Inputs keep focus.
+addEventListener(
+  'mousedown',
+  (e) => {
+    if (!(e.target as Element).closest('button')) return;
+    e.preventDefault();
+    (document.activeElement as HTMLElement | null)?.blur();
+  },
+  true,
+);
 addEventListener('keydown', (e) => {
   if (!$('#modal').hidden) return;
   // A focused control (a button clicked last, the mute switch) keeps Enter and Space for itself.

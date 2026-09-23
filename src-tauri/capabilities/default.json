@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Every rshot window: window dragging (a data-tauri-drag-region drags, a double click toggles maximize), no app commands. The notification plugin's init script asks is_permission_granted in every page. Pages get only the core APIs they call (see overlay, editor, settings); never tray or menu.",
+  "description": "Every rshot window: window dragging (a data-tauri-drag-region drags, a double click toggles maximize) and Ctrl+Shift+I devtools (only dev builds inject that script), no app commands. The notification plugin's init script asks is_permission_granted in every page. Pages get only the core APIs they call (see overlay, editor, settings); never tray or menu.",
   "windows": ["*"],
-  "permissions": ["core:window:allow-start-dragging", "core:window:allow-internal-toggle-maximize", "notification:allow-is-permission-granted"]
+  "permissions": ["core:window:allow-start-dragging", "core:window:allow-internal-toggle-maximize", "core:webview:allow-internal-toggle-devtools", "notification:allow-is-permission-granted"]
 }

@@ -225,9 +225,9 @@ pub fn orphan_stem(name: &str) -> Option<&str> {
         .filter(|s| s.starts_with("Recording_"))
 }
 
-/// A stop's or a trim's hidden temp output (`.….part.mp4`, `.….trim.mp4`).
+/// A stop's or a trim's hidden temp output for a recording (`.Recording_….part.mp4`, `.….trim.mp4`).
 pub fn stale_temp(name: &str) -> bool {
-    name.starts_with('.') && (name.ends_with(".part.mp4") || name.ends_with(".trim.mp4"))
+    name.starts_with(".Recording_") && (name.ends_with(".part.mp4") || name.ends_with(".trim.mp4"))
 }
 
 /// `stem.ext`, `stem_2.ext`, `stem_3.ext`…
@@ -504,7 +504,8 @@ mod tests {
         assert_eq!(orphan_stem(".Holiday.mkv"), None);
         assert_eq!(orphan_stem(&format!(".{stem}.part.mp4")), None);
         assert!(stale_temp(&format!(".{stem}.part.mp4")));
-        assert!(stale_temp(".Holiday.trim.mp4"));
+        assert!(stale_temp(&format!(".{stem}.trim.mp4")));
+        assert!(!stale_temp(".Holiday.trim.mp4"), "only a recording's");
         assert!(!stale_temp(&format!("{stem}.mp4")));
         assert!(!stale_temp("Holiday.part.mp4"));
         assert!(!stale_temp(&format!(".{stem}.mkv")));

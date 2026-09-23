@@ -596,6 +596,16 @@ pub fn recover(app: &AppHandle) {
         .filter_map(|n| Some((n, store::orphan_stem(n)?)))
     {
         let mkv = dir.join(name);
+        // Written in the last 5 s: its ffmpeg may still be finishing after its SIGTERM. Next start.
+        let fresh = mkv
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|d| d < Duration::from_secs(5));
+        if fresh {
+            continue;
+        }
         let mp4 = store::unused(&dir, stem, "mp4");
         let msg = match finalize(&ffmpeg, &mkv, &mp4) {
             Ok(()) => format!("Recovered an interrupted recording: {}", mp4.display()),

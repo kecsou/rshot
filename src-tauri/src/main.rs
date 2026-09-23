@@ -222,10 +222,9 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
         CaptureScreen => pipeline::capture_screen_now(app),
         CaptureWindow => pipeline::capture_window_now(app),
         Record => {
-            if recorder::is_recording(app) || recorder::is_ending() {
+            if recorder::is_recording(app) {
                 // Off this handler (the CLI waits on it), like the tray. Stopping is a no-op if the
-                // watchdog ended the recording meanwhile (it has already told the user), or if one
-                // is being saved: no new overlay then either.
+                // watchdog ended the recording meanwhile; it has already told the user.
                 let app = app.clone();
                 std::thread::spawn(move || {
                     if let Err(e) = recorder::stop(&app) {
@@ -234,6 +233,7 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
                 });
                 Ok(())
             } else if let Some(why) = recorder::unavailable(app) {
+                // e.g. the last recording is still being saved: said, and no new overlay.
                 Err(why.into())
             } else {
                 overlay::start(app, "recarea")
