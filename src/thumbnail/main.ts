@@ -53,11 +53,13 @@ async function run() {
   requestAnimationFrame(tick);
   card.addEventListener('mouseenter', () => (hovering = true));
   card.addEventListener('mouseleave', () => (hovering = false));
+  // The daemon closes this card once the editor is up; on failure it notifies and the card stays.
+  const edit = () => ipc.openEditor(t.path).catch(() => {});
 
   card.addEventListener('click', async (e) => {
     const b = (e.target as Element).closest<HTMLButtonElement>('button');
     if (!b) return;
-    if (b.dataset.act === 'edit') await ipc.openEditor(t.path);
+    if (b.dataset.act === 'edit') await edit();
     else if (b.dataset.act === 'reveal') await ipc.revealCapture(t.path);
     else if (b.dataset.act === 'delete') await ipc.deleteCapture(t.path);
     else if (b.id === 'retry') {
@@ -90,7 +92,7 @@ async function run() {
       if (mode === 'swipe') {
         if (u.clientX - sx > 80) dismiss();
         else card.style.transform = '';
-      } else if (mode === 'none') void ipc.openEditor(t.path);
+      } else if (mode === 'none') void edit();
     };
     const cleanup = () => {
       removeEventListener('pointermove', onMove);

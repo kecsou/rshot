@@ -23,18 +23,20 @@ pub fn tildify(p: &Path) -> String {
 
 /// Only the last capture and files open in an editor may be read, opened or deleted from a
 /// webview; `last` and `open` are canonical. (The screenshots folder is settable from a webview,
-/// so "anything in it" would be a hole.) Returns `path` as given, not canonical, so the clipboard
-/// and the editor keep the path the user already has, even through a symlinked folder.
-fn check(path: &str, last: Option<&Path>, open: &[PathBuf]) -> Result<PathBuf, String> {
+/// so "anything in it" would be a hole.) Returns `(given, canonical)`: file I/O must go through the
+/// canonical path, the one that was checked (the given one may be re-pointed since). The given one
+/// is only for the clipboard and display, so they keep the path the user already has, even
+/// through a symlinked folder.
+fn check(path: &str, last: Option<&Path>, open: &[PathBuf]) -> Result<(PathBuf, PathBuf), String> {
     let p = Path::new(path).canonicalize().map_err(err)?;
     if last == Some(p.as_path()) || open.contains(&p) {
-        Ok(PathBuf::from(path))
+        Ok((PathBuf::from(path), p))
     } else {
         Err("not the last capture or a file open in the editor".into())
     }
 }
 
-pub(crate) fn guard(state: &AppState, path: &str) -> Result<PathBuf, String> {
+pub(crate) fn guard(state: &AppState, path: &str) -> Result<(PathBuf, PathBuf), String> {
     let last = state
         .last_capture
         .lock()
@@ -61,8 +63,8 @@ pub fn thumbnail_info(state: State<'_, AppState>) -> Option<Thumb> {
 #[tauri::command]
 pub async fn read_capture(app: AppHandle, path: String) -> Result<Response, String> {
     let state = app.state::<AppState>();
-    let p = guard(&state, &path)?;
-    std::fs::read(p).map(Response::new).map_err(err)
+    let (_, canon) = guard(&state, &path)?;
+    std::fs::read(canon).map(Response::new).map_err(err)
 }
 
 #[tauri::command]
@@ -72,7 +74,7 @@ pub fn reveal_capture(
     path: String,
 ) -> Result<(), String> {
     app.opener()
-        .reveal_item_in_dir(guard(&state, &path)?)
+        .reveal_item_in_dir(guard(&state, &path)?.1)
         .map_err(err)
 }
 
@@ -82,7 +84,7 @@ pub fn delete_capture(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<(), String> {
-    std::fs::remove_file(guard(&state, &path)?).map_err(err)?;
+    std::fs::remove_file(guard(&state, &path)?.1).map_err(err)?;
     ui::close_prefix(&app, "thumbnail");
     // Forget it (Open Last Capture, a new card) unless a newer capture already took its place.
     let mut last = state.last_capture.lock().unwrap();
@@ -95,10 +97,10 @@ pub fn delete_capture(
 
 #[tauri::command(async)]
 pub fn retry_copy(state: State<'_, AppState>, path: String) -> Result<(), String> {
-    let p = guard(&state, &path)?;
-    let png = std::fs::read(&p).map_err(err)?;
+    let (given, canon) = guard(&state, &path)?;
+    let png = std::fs::read(canon).map_err(err)?;
     let mode = state.config.lock().unwrap().clipboard_mode;
-    state.clipboard.copy_capture(&p, Some(&png), mode)?;
+    state.clipboard.copy_capture(&given, Some(&png), mode)?;
     if let Some(t) = state.thumb.lock().unwrap().as_mut() {
         t.copied = true;
     }
@@ -128,7 +130,8 @@ mod tests {
         assert!(allowed("sub/../edited.png", Some(&last), &open));
         assert!(allowed("edited.png", None, &open));
         assert!(!allowed("edited.png", Some(&last), &[]));
-        // Through a symlinked folder the path comes back as given, not canonical.
+        // Through a symlinked folder: the path as given (for the clipboard) plus the canonical
+        // one that was checked (for file I/O).
         #[cfg(unix)]
         {
             let link = dir.with_extension("link");
@@ -137,7 +140,7 @@ mod tests {
             let got = super::check(given.to_str().unwrap(), None, &open);
             let other = super::check(link.join("other.png").to_str().unwrap(), None, &open);
             std::fs::remove_file(&link).unwrap();
-            assert_eq!(got, Ok(given));
+            assert_eq!(got, Ok((given, open[0].clone())));
             assert!(other.is_err());
         }
         std::fs::remove_dir_all(&dir).unwrap();

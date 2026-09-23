@@ -43,7 +43,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .on_menu_event(|app, e| {
             let result = match e.id.as_ref() {
-                "quit" => return app.exit(0),
+                "quit" => return quit(app),
                 "settings" => open_settings(app),
                 "last" => open_last(app),
                 "folder" => open_folder(app),
@@ -71,6 +71,29 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Open editors are asked to close first (each prompts for unsaved changes); Quit exits once
+/// none is left, so after that a second Quit does.
+fn quit(app: &AppHandle) {
+    let labels: Vec<String> = app
+        .state::<crate::AppState>()
+        .editors
+        .lock()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect();
+    let editors: Vec<WebviewWindow> = labels
+        .iter()
+        .filter_map(|l| app.get_webview_window(l))
+        .collect();
+    if editors.is_empty() {
+        return app.exit(0);
+    }
+    for w in editors {
+        let _ = w.close(); // a close request, like the window's own close: the editor decides
+    }
+}
+
 fn open_last(app: &AppHandle) -> Result<(), String> {
     let last = app
         .state::<crate::AppState>()
@@ -79,10 +102,10 @@ fn open_last(app: &AppHandle) -> Result<(), String> {
         .unwrap()
         .clone();
     let path = last.ok_or("No capture yet")?;
-    if !path.exists() {
-        return Err("The last capture no longer exists".into());
-    }
-    open_editor(app, &path)
+    let canon = path
+        .canonicalize()
+        .map_err(|_| "The last capture no longer exists")?;
+    open_editor(app, &path, canon)
 }
 
 fn open_folder(app: &AppHandle) -> Result<(), String> {
@@ -318,10 +341,14 @@ fn monitor_at(app: &AppHandle, x: f64, y: f64) -> Result<tauri::Monitor, String>
 }
 
 /// One editor per file: refocus it if it's open, otherwise open one at 80 % of the monitor under
-/// the pointer. Windows are matched on the canonical path, so the thumbnail and the tray find the
-/// same one; the editor keeps `path` as given for display and the clipboard.
-pub fn open_editor(app: &AppHandle, path: &std::path::Path) -> Result<(), String> {
-    let canon = path.canonicalize().map_err(err)?;
+/// the pointer. Windows are matched on `canon` (`path` canonicalized by the caller), so the
+/// thumbnail and the tray find the same one; the editor keeps `path` as given for display and the
+/// clipboard. The thumbnail card goes once the editor is up (on failure it stays, to retry from).
+pub fn open_editor(
+    app: &AppHandle,
+    path: &std::path::Path,
+    canon: std::path::PathBuf,
+) -> Result<(), String> {
     let state = app.state::<crate::AppState>();
     let existing = state
         .editors
@@ -334,11 +361,13 @@ pub fn open_editor(app: &AppHandle, path: &std::path::Path) -> Result<(), String
         Some(w) => w,
         None => new_editor(app, path.to_path_buf(), canon)?,
     };
+    let _ = win.unminimize();
     win.show().map_err(err)?;
     win.set_focus().map_err(err)?;
     // Mutter ignores set_focus for windows opened from another app's click (Plan 1 Task 6/13).
     #[cfg(target_os = "linux")]
     force_focus(&win);
+    close_prefix(app, "thumbnail");
     Ok(())
 }
 
