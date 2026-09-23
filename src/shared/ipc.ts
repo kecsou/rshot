@@ -44,9 +44,11 @@ export const revealCapture = (path: string) => invoke<void>('reveal_capture', { 
 export const deleteCapture = (path: string) => invoke<void>('delete_capture', { path });
 export const retryCopy = (path: string) => invoke<void>('retry_copy', { path });
 export const dismissThumbnail = () => invoke<void>('close_window'); // this card only
-/** A recording's first frame (PNG bytes) and duration in seconds (null if unknown). */
-export type VideoPoster = { png: number[]; duration: number | null };
-export const videoPoster = (path: string) => invoke<VideoPoster>('video_poster', { path });
+/** A recording's duration in seconds (NaN if unknown) and first frame. Raw bytes: an f64 (LE), then the PNG. */
+export const videoPoster = async (path: string) => {
+  const b = await invoke<ArrayBuffer>('video_poster', { path });
+  return { duration: new DataView(b).getFloat64(0, true), png: b.slice(8) };
+};
 
 export const countdownInfo = () => invoke<number>('countdown_info');
 export const countdownDone = () => invoke<void>('countdown_done');

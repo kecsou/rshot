@@ -11,29 +11,65 @@ use std::{
     net::{TcpListener, TcpStream},
     path::PathBuf,
     sync::{
-        atomic::{AtomicU64, Ordering},
-        Mutex, OnceLock,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+        Mutex,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 /// Token → (editor window label, canonical path).
 static FILES: Mutex<BTreeMap<String, (String, PathBuf)>> = Mutex::new(BTreeMap::new());
-static PORT: OnceLock<Result<u16, String>> = OnceLock::new();
+/// The server's port once it's listening; a failed start is retried by the next editor.
+static PORT: Mutex<Option<u16>> = Mutex::new(None);
+/// Connections being served. A player opens a few at a time; more are dropped.
+static CONNS: AtomicUsize = AtomicUsize::new(0);
+const MAX_CONNS: usize = 32;
+/// The whole request head must arrive within this (a slow client can't hold a thread).
+const HEAD_BUDGET: Duration = Duration::from_secs(10);
 
 /// The server's port; it starts on first use, once per process.
 fn port() -> Result<u16, String> {
-    PORT.get_or_init(|| {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(err)?;
-        let port = listener.local_addr().map_err(err)?.port();
-        std::thread::spawn(move || {
-            for conn in listener.incoming().flatten() {
-                std::thread::spawn(move || serve(conn, port));
-            }
+    let mut port = PORT.lock().unwrap();
+    if let Some(p) = *port {
+        return Ok(p);
+    }
+    let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(err)?;
+    let p = listener.local_addr().map_err(err)?.port();
+    std::thread::Builder::new()
+        .name("rshot-stream".into())
+        .spawn(move || accept(listener, p))
+        .map_err(err)?;
+    *port = Some(p);
+    Ok(p)
+}
+
+fn accept(listener: TcpListener, port: u16) {
+    for conn in listener.incoming() {
+        let Ok(conn) = conn else {
+            // e.g. out of file descriptors: back off rather than spin.
+            std::thread::sleep(Duration::from_millis(50));
+            continue;
+        };
+        if CONNS.fetch_add(1, Ordering::AcqRel) >= MAX_CONNS {
+            CONNS.fetch_sub(1, Ordering::AcqRel);
+            continue; // dropped: closed unanswered
+        }
+        let slot = Slot;
+        // A thread that can't start drops the connection (and its slot) instead of panicking.
+        let _ = std::thread::Builder::new().spawn(move || {
+            let _slot = slot;
+            serve(conn, port);
         });
-        Ok(port)
-    })
-    .clone()
+    }
+}
+
+/// One of the MAX_CONNS connection slots, given back when the connection ends.
+struct Slot;
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        CONNS.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 /// Streams `canon` to editor window `label` until `revoke(label)`.
@@ -49,7 +85,7 @@ pub fn revoke(label: &str) {
 
 /// The URL of editor window `label`'s stream, if it has one.
 pub fn url(label: &str) -> Option<String> {
-    let port = *PORT.get()?.as_ref().ok()?;
+    let port = (*PORT.lock().unwrap())?;
     FILES
         .lock()
         .unwrap()
@@ -73,13 +109,29 @@ fn token() -> String {
     format!("{:016x}{:016x}", half(), half())
 }
 
-/// One request per connection (`Connection: close`): a head of at most 8 KiB, then the answer.
-fn serve(conn: TcpStream, port: u16) {
-    let _ = conn.set_read_timeout(Some(Duration::from_secs(10)));
-    let Ok(mut out) = conn.try_clone() else {
-        return;
-    };
-    let mut req = BufReader::new(conn.take(8192));
+/// Reads that share one deadline, however the bytes trickle in.
+struct Deadline<'a> {
+    conn: &'a TcpStream,
+    until: Instant,
+}
+
+impl Read for Deadline<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.until.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(std::io::ErrorKind::TimedOut.into());
+        }
+        self.conn.set_read_timeout(Some(left))?;
+        (&mut &*self.conn).read(buf)
+    }
+}
+
+/// One request per connection (`Connection: close`): a head of at most 8 KiB, read within
+/// HEAD_BUDGET, then the answer.
+fn serve(mut conn: TcpStream, port: u16) {
+    let until = Instant::now() + HEAD_BUDGET;
+    let head = Deadline { conn: &conn, until };
+    let mut req = BufReader::new(head.take(8192));
     let mut line = String::new();
     let _ = req.read_line(&mut line);
     let mut words = line.split_whitespace();
@@ -98,8 +150,9 @@ fn serve(conn: TcpStream, port: u16) {
             }
         }
     }
+    drop(req);
     let _ = respond(
-        &mut out,
+        &mut conn,
         port,
         method,
         target,
@@ -217,6 +270,48 @@ fn empty(status: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn answer(method: &str, target: &str, host: &str) -> String {
+        let mut out = Vec::new();
+        respond(&mut out, 4321, method, target, Some(host), None).unwrap();
+        String::from_utf8_lossy(&out).into_owned()
+    }
+
+    #[test]
+    fn host_then_method_then_token_then_the_file() {
+        let ours = "127.0.0.1:4321";
+        assert!(answer("POST", "/nope", "evil.example:4321").starts_with("HTTP/1.1 403 "));
+        assert!(answer("POST", "/nope", ours).starts_with("HTTP/1.1 405 "));
+        assert!(answer("GET", "/nope", ours).starts_with("HTTP/1.1 404 "));
+        assert!(answer("GET", "/../../etc/passwd", ours).starts_with("HTTP/1.1 404 "));
+        let file = std::env::temp_dir().join(format!("rshot-stream-{}.mp4", std::process::id()));
+        std::fs::write(&file, b"0123456789").unwrap();
+        let token = "0123456789abcdef0123456789abcdef";
+        FILES
+            .lock()
+            .unwrap()
+            .insert(token.into(), ("respond-test".into(), file.clone()));
+        let get = answer("GET", &format!("/{token}"), ours);
+        let head = answer("HEAD", &format!("/{token}"), ours);
+        let mut part = Vec::new();
+        respond(
+            &mut part,
+            4321,
+            "GET",
+            &format!("/{token}"),
+            Some(ours),
+            Some("bytes=2-4"),
+        )
+        .unwrap();
+        revoke("respond-test");
+        let gone = answer("GET", &format!("/{token}"), ours);
+        std::fs::remove_file(&file).unwrap();
+        assert!(get.starts_with("HTTP/1.1 200 OK\r\n") && get.ends_with("\r\n\r\n0123456789"));
+        assert!(head.starts_with("HTTP/1.1 200 OK\r\n") && head.contains("Content-Length: 10\r\n"));
+        assert!(head.ends_with("\r\n\r\n"), "HEAD sends no body: {head:?}");
+        assert!(String::from_utf8_lossy(&part).ends_with("\r\n\r\n234"));
+        assert!(gone.starts_with("HTTP/1.1 404 "));
+    }
 
     #[test]
     fn only_our_own_host_is_served() {

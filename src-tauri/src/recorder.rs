@@ -202,7 +202,8 @@ pub fn remux_args(mkv: &Path, mp4: &Path) -> Vec<String> {
     ])
 }
 
-/// Frame-accurate: `-ss` before `-i` with a re-encode seeks exactly. Muted drops the audio.
+/// Frame-accurate: `-ss` before `-i` with a re-encode seeks exactly. Muted drops the audio. An empty
+/// result fails (`-abort_on empty_output`), so it can never be renamed over the recording.
 pub fn trim_args(src: &Path, start: f64, end: f64, mute: bool, out: &Path) -> Vec<String> {
     let (src, out) = (src.display().to_string(), out.display().to_string());
     let (ss, t) = (format!("{start:.3}"), format!("{:.3}", end - start));
@@ -210,6 +211,8 @@ pub fn trim_args(src: &Path, start: f64, end: f64, mute: bool, out: &Path) -> Ve
         "-hide_banner",
         "-loglevel",
         "error",
+        "-abort_on",
+        "empty_output",
         "-ss",
         &ss,
         "-i",
@@ -255,11 +258,52 @@ pub fn poster_args(src: &Path, width: u32) -> Vec<String> {
 }
 
 /// Seconds from the `  Duration: 00:01:02.50, start: …` line of ffmpeg's stderr; `None` for `N/A`.
+/// Only a line that starts with it counts: a title can contain "Duration: " too.
 pub fn parse_duration(stderr: &str) -> Option<f64> {
-    let hms = stderr.split("Duration: ").nth(1)?.split(',').next()?;
+    let line = stderr
+        .lines()
+        .find_map(|l| l.trim_start().strip_prefix("Duration: "))?;
+    let hms = line.split(',').next()?;
     let mut parts = hms.split(':').map(|p| p.trim().parse::<f64>().ok());
     let (h, m, s) = (parts.next()??, parts.next()??, parts.next()??);
     Some(h * 3600.0 + m * 60.0 + s)
+}
+
+/// Runs `cmd` to completion like `Command::output`, but kills it after `limit`.
+pub fn output_within(mut cmd: Command, limit: Duration) -> Result<std::process::Output, String> {
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(err)?;
+    // Both pipes drain on their own threads, so a chatty child can't block on a full pipe.
+    let drain = |mut r: Box<dyn std::io::Read + Send>| {
+        std::thread::spawn(move || {
+            let mut b = Vec::new();
+            let _ = r.read_to_end(&mut b);
+            b
+        })
+    };
+    let out = drain(Box::new(child.stdout.take().expect("piped")));
+    let errs = drain(Box::new(child.stderr.take().expect("piped")));
+    let deadline = Instant::now() + limit;
+    let status = loop {
+        if let Some(status) = child.try_wait().map_err(err)? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("ffmpeg took too long".into());
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    Ok(std::process::Output {
+        status,
+        stdout: out.join().unwrap_or_default(),
+        stderr: errs.join().unwrap_or_default(),
+    })
 }
 
 static GENERATION: AtomicU64 = AtomicU64::new(1);
@@ -774,6 +818,8 @@ mod tests {
                 "-hide_banner",
                 "-loglevel",
                 "error",
+                "-abort_on",
+                "empty_output",
                 "-ss",
                 "4.800",
                 "-i",
@@ -822,6 +868,21 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn output_within_kills_a_slow_command() {
+        let t = Instant::now();
+        let mut slow = Command::new("sleep");
+        slow.arg("5");
+        assert!(output_within(slow, Duration::from_millis(200)).is_err());
+        assert!(t.elapsed() < Duration::from_secs(2));
+        let mut quick = Command::new("echo");
+        quick.arg("hi");
+        let out = output_within(quick, Duration::from_secs(5)).unwrap();
+        assert!(out.status.success());
+        assert_eq!(out.stdout, b"hi\n");
+    }
+
     #[test]
     fn duration_parses_from_ffmpeg_stderr() {
         let err = "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/v/R.mp4':\n  Metadata:\n    encoder         : Lavf61.7.100\n  Duration: 00:01:02.50, start: 0.000000, bitrate: 97 kb/s\n";
@@ -832,5 +893,7 @@ mod tests {
         );
         assert_eq!(parse_duration("  Duration: N/A, start: 0"), None);
         assert_eq!(parse_duration("no input"), None);
+        let decoy = "  Metadata:\n    title           : Duration: 09:09:09.00, fake\n  Duration: 00:00:20.20, start: 0.000000, bitrate: 712 kb/s\n";
+        assert_eq!(parse_duration(decoy), Some(20.2));
     }
 }

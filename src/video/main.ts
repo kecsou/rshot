@@ -5,6 +5,7 @@ import './video.css';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ask, fail } from '../shared/ask';
 import { mountIcons } from '../shared/icons';
+import { usKey } from '../editor/model';
 import * as ipc from '../shared/ipc';
 import { clampTrim, clock, fmt, playable, timeAt } from './trim';
 
@@ -31,24 +32,29 @@ $('#title').textContent = info.name;
 $('#path').textContent = info.display;
 // Streamed from the loopback server (WebKitGTK's player can't read a custom URI scheme).
 if (info.stream) v.src = info.stream;
-let ok = !!info.stream && (await playable(v));
-const dur = ok ? v.duration : 0;
+/** The duration is known: the trim range means something. */
+const loaded = !!info.stream && (await playable(v));
+/** It can play and be edited here; false after a playback error. */
+let ok = loaded;
+const dur = loaded ? v.duration : 0;
 let [start, end] = [0, dur];
 let mute = false;
-$('#meta').textContent = ok ? `${clock(dur)} · ${v.videoWidth} × ${v.videoHeight} · MP4` : 'MP4';
+$('#meta').textContent = loaded ? `${clock(dur)} · ${v.videoWidth} × ${v.videoHeight} · MP4` : 'MP4';
 
-/** Can't play here (WebKitGTK needs gstreamer1.0-libav for H.264): Copy, Reveal and Delete still work. */
+/**
+ * Can't play here (WebKitGTK needs gstreamer1.0-libav for H.264): the player goes, and Copy, Reveal
+ * and Delete still work. A range chosen before a later playback error is kept: Done still trims it.
+ */
 function unplayable() {
   ok = false;
-  [start, end, mute] = [0, dur, false];
   v.pause();
   document.body.classList.add('noplay');
-  $('#readout').textContent = '';
+  if (!loaded) $('#readout').textContent = '';
 }
 if (!ok) unplayable();
 v.addEventListener('error', unplayable);
 
-const changed = () => ok && (start > 0.05 || end < dur - 0.05 || mute);
+const changed = () => loaded && (start > 0.05 || end < dur - 0.05 || mute);
 
 function render() {
   if (!ok) return;
@@ -208,7 +214,11 @@ $('#reveal').addEventListener('click', () => void ipc.revealCapture(info.path));
 $('#delete').addEventListener('click', () => void remove());
 addEventListener('keydown', (e) => {
   if (!$('#modal').hidden) return;
-  if (e.key === ' ') {
+  // Ctrl+C = Copy, on any layout (usKey maps the physical key, and ignores AltGr).
+  if ((e.ctrlKey || e.metaKey) && [e.key.toLowerCase(), usKey(e)].includes('c')) {
+    e.preventDefault();
+    void copy();
+  } else if (e.key === ' ') {
     e.preventDefault();
     toggle();
   } else if (e.key === 'Enter') {

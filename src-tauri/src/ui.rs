@@ -631,8 +631,11 @@ fn new_editor(
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let page = if crate::thumbnail::is_mp4(&canon) {
-        // Its page plays it from the loopback server, for as long as this window is open.
-        crate::stream::share(&label, canon.clone())?;
+        // Its page plays it from the loopback server, for as long as this window is open. Without
+        // a stream the page still opens, and says it can't play the video (Copy, Delete work).
+        if let Err(e) = crate::stream::share(&label, canon.clone()) {
+            eprintln!("rshot: can't stream {}: {e}", canon.display());
+        }
         "video/index.html"
     } else {
         "editor/index.html"

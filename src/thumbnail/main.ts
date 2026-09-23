@@ -17,14 +17,20 @@ function setCopied(ok: boolean) {
   document.querySelector<HTMLElement>('#retry')!.hidden = ok;
 }
 
-/** Small PNG for the drag cursor (the full capture would be enormous). */
+/** Small PNG for the drag cursor (the full capture would be enormous); a plain tile until one is shown. */
 function dragIcon(): string {
   const w = 160;
-  const h = Math.max(1, Math.round((img.naturalHeight / Math.max(1, img.naturalWidth)) * w));
+  const shown = img.naturalWidth > 0;
+  const h = shown ? Math.max(1, Math.round((img.naturalHeight / img.naturalWidth) * w)) : 90;
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
-  c.getContext('2d')!.drawImage(img, 0, 0, w, h);
+  const g = c.getContext('2d')!;
+  if (shown) g.drawImage(img, 0, 0, w, h);
+  else {
+    g.fillStyle = '#111';
+    g.fillRect(0, 0, w, h);
+  }
   return c.toDataURL('image/png');
 }
 
@@ -32,15 +38,16 @@ async function run() {
   const t = await ipc.thumbnailInfo();
   if (!t) return void ipc.dismissThumbnail();
   if (t.kind === 'video') {
-    // A poster frame and the duration from ffmpeg: the card never plays the video.
+    // A poster frame and the duration from ffmpeg (the card never plays the video). The path, the
+    // timer and the actions don't wait for it.
     document.querySelector<HTMLElement>('.play')!.hidden = false;
-    const p = await ipc.videoPoster(t.path).catch(() => null);
-    if (p) img.src = URL.createObjectURL(new Blob([new Uint8Array(p.png)], { type: 'image/png' }));
-    if (p?.duration != null) {
+    void ipc.videoPoster(t.path).then((p) => {
+      img.src = URL.createObjectURL(new Blob([p.png], { type: 'image/png' }));
+      if (Number.isNaN(p.duration)) return;
       const d = document.querySelector<HTMLElement>('.dur')!;
       d.textContent = clock(p.duration);
       d.hidden = false;
-    }
+    }, () => {});
   } else {
     img.src = URL.createObjectURL(new Blob([await ipc.readCapture(t.path)], { type: 'image/png' }));
   }
