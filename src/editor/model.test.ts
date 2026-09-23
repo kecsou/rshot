@@ -29,6 +29,16 @@ describe('geometry', () => {
     expect(M.redactBlock(0.5, 1)).toBeGreaterThan(M.redactBlock(0, 1));
     expect(M.redactBlock(1, 1)).toBeGreaterThan(M.redactBlock(0.5, 1));
   });
+  it('redactRect snaps outward to whole pixels and clips to the image', () => {
+    expect(M.redactRect({ x: 10.4, y: 20.6, w: 30.2, h: 9.1 }, 200, 100)).toEqual({ x: 10, y: 20, w: 31, h: 10 });
+    expect(M.redactRect({ x: 150, y: 20, w: 60.2, h: 40 }, 200, 100)).toEqual({ x: 150, y: 20, w: 50, h: 40 }); // right
+    expect(M.redactRect({ x: 10, y: 60, w: 40, h: 41 }, 200, 100)).toEqual({ x: 10, y: 60, w: 40, h: 40 }); // bottom
+    expect(M.redactRect({ x: -5.5, y: 20, w: 30, h: 40 }, 200, 100)).toEqual({ x: 0, y: 20, w: 25, h: 40 }); // left
+    expect(M.redactRect({ x: 10, y: -3, w: 30, h: 13 }, 200, 100)).toEqual({ x: 10, y: 0, w: 30, h: 10 }); // top
+    expect(M.redactRect({ x: 199.8, y: 20, w: 0.1, h: 40 }, 200, 100)).toEqual({ x: 199, y: 20, w: 1, h: 40 }); // W+0.2 edge snaps inside
+    expect(M.redactRect({ x: 210, y: 20, w: 30, h: 40 }, 200, 100)).toBeNull();
+    expect(M.redactRect({ x: 10, y: -50, w: 30, h: 49.5 }, 200, 100)).toBeNull();
+  });
 });
 
 describe('hit testing', () => {

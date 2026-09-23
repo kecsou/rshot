@@ -36,6 +36,16 @@ export function redactBlock(strength: number, u: number): number {
   return Math.round((12 + 20 * strength) * u);
 }
 
+/** Area a redaction covers: snapped outward to whole pixels (so antialiased edges can't blend
+ *  original pixels back in) and clipped to the W×H image; null when nothing of it is left. */
+export function redactRect(r: Rect, W: number, H: number): Rect | null {
+  const x = Math.max(0, Math.floor(r.x));
+  const y = Math.max(0, Math.floor(r.y));
+  const w = Math.min(W, Math.ceil(r.x + r.w)) - x;
+  const h = Math.min(H, Math.ceil(r.y + r.h)) - y;
+  return w >= 1 && h >= 1 ? { x, y, w, h } : null;
+}
+
 export function norm(a: Pt, b: Pt): Rect {
   return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
 }

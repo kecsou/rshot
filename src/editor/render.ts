@@ -1,4 +1,4 @@
-import { type Doc, type Rect, type Shape, COUNTER_R, TEXT_PX, bounds, exportOrder, handles, norm, redactBlock, strokeWidth } from './model';
+import { type Doc, type Rect, type Shape, COUNTER_R, TEXT_PX, bounds, exportOrder, handles, norm, redactBlock, redactRect, strokeWidth } from './model';
 
 export type Src = CanvasImageSource & { width: number; height: number };
 
@@ -100,16 +100,18 @@ function counter(ctx: CanvasRenderingContext2D, s: Extract<Shape, { kind: 'count
 }
 
 /** Pixelate/blur re-sample the ORIGINAL pixels through a small canvas, so the saved PNG holds no trace of them. */
-function redact(ctx: CanvasRenderingContext2D, src: Src, r: Rect, mode: string, strength: number, u: number) {
-  // Snap outward to whole pixels so antialiased edges can't blend original pixels back in.
-  const x = Math.floor(r.x), y = Math.floor(r.y);
-  r = { x, y, w: Math.ceil(r.x + r.w) - x, h: Math.ceil(r.y + r.h) - y };
-  if (r.w < 1 || r.h < 1) return;
+function redact(ctx: CanvasRenderingContext2D, src: Src, area: Rect, mode: string, strength: number, u: number) {
+  // Clipped to the image: WebKitGTK draws nothing for a source rect that overshoots the bitmap.
+  const r = redactRect(area, src.width, src.height);
+  if (!r) return;
   if (mode === 'solid') {
     ctx.fillStyle = '#1c1c1e';
     ctx.fillRect(r.x, r.y, r.w, r.h);
     return;
   }
+  // Backstop: if an engine quirk leaves the small canvas transparent, black shows, never the original.
+  ctx.fillStyle = '#000';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
   const block = redactBlock(strength, u);
   const small = document.createElement('canvas');
   small.width = Math.max(1, Math.round(r.w / block));
