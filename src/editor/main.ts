@@ -31,7 +31,7 @@ type Drag =
   | { kind: 'draw'; start: M.Pt; shape: M.Shape }
   | { kind: 'move'; start: M.Pt; orig: M.Shape }
   | { kind: 'handle'; handle: M.HandleId; orig: M.Shape }
-  | { kind: 'crop-new'; start: M.Pt }
+  | { kind: 'crop-new'; start: M.Pt; prev: M.Rect }
   | { kind: 'crop-move'; start: M.Pt; orig: M.Rect }
   | { kind: 'crop-corner'; fixed: M.Pt };
 
@@ -102,7 +102,7 @@ function replaceShape(next: M.Shape) {
 function fit() {
   fitMode = true;
   const v = viewRect();
-  zoom = M.fitZoom(v.w, v.h, stage.clientWidth - 140, stage.clientHeight - 60);
+  zoom = M.fitZoom(v.w, v.h, stage.clientWidth - 140, stage.clientHeight - (crop ? 110 : 60));
 }
 
 function setZoom(z: number) {
@@ -255,8 +255,10 @@ canvas.addEventListener('pointerdown', (e) => {
   paint();
 });
 
-// A click on the canvas must not move focus: it would blur (and so commit) the text box it just opened.
-canvas.addEventListener('mousedown', (e) => e.preventDefault());
+// pointerdown may have just opened the text box: the click mustn't blur (and so commit) it.
+canvas.addEventListener('mousedown', (e) => {
+  if (editingText) e.preventDefault();
+});
 
 canvas.addEventListener('pointermove', (e) => {
   if (!drag) return;
@@ -287,7 +289,10 @@ canvas.addEventListener('pointerup', () => {
   const d = drag;
   drag = null;
   if (!d) return;
-  if (d.kind === 'crop-new' || d.kind === 'crop-move' || d.kind === 'crop-corner') return render();
+  if (d.kind === 'crop-new' || d.kind === 'crop-move' || d.kind === 'crop-corner') {
+    if (d.kind === 'crop-new' && crop && (crop.draft.w < 3 || crop.draft.h < 3)) crop.draft = d.prev; // a click, not a drag
+    return render();
+  }
   const next = live;
   live = null;
   if (!next) return render();
@@ -344,6 +349,8 @@ function commitText(cancel = false) {
   if (!editingText) return;
   const { id, at } = editingText;
   editingText = null;
+  // Hiding alone leaves the box focused for the input method, which then types the next tool key into it.
+  texted.blur();
   texted.hidden = true;
   const value = cancel && id === null ? '' : texted.value.replace(/\s+$/, '');
   const rest = hist.doc.shapes.filter((s) => s.id !== id);
@@ -362,6 +369,7 @@ function commitText(cancel = false) {
 texted.addEventListener('input', autosize);
 texted.addEventListener('keydown', (e) => {
   e.stopPropagation();
+  if (e.isComposing) return; // Enter/Escape belong to the input method while it composes
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     commitText();
@@ -412,7 +420,7 @@ function startCropDrag(p: M.Pt) {
   const within = (r.w < W || r.h < H) && p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h;
   // cropFromDrag expects its start inside the image.
   const start = { x: Math.max(0, Math.min(W, p.x)), y: Math.max(0, Math.min(H, p.y)) };
-  drag = corner ? { kind: 'crop-corner', fixed: corner[1] } : within ? { kind: 'crop-move', start: p, orig: r } : { kind: 'crop-new', start };
+  drag = corner ? { kind: 'crop-corner', fixed: corner[1] } : within ? { kind: 'crop-move', start: p, orig: r } : { kind: 'crop-new', start, prev: r };
 }
 
 function moveCropDrag(p: M.Pt) {
@@ -456,18 +464,21 @@ function ask(text: string, buttons: { label: string; value: string; primary?: bo
       }),
     );
     $('#modal').hidden = false;
-    (acts.lastElementChild as HTMLElement | null)?.focus();
+    // Enter picks the safe choice: Cancel on a destructive prompt, else the primary action.
+    (acts.querySelector<HTMLElement>('.b1:not(.danger)') ?? (acts.firstElementChild as HTMLElement | null))?.focus();
   });
 }
 
 const fail = (what: string, e: unknown) => ask(`${what}: ${e}`, [{ label: 'OK', value: 'ok', primary: true }]);
 
+/** True when what's on screen is now on disk (an edit made during the write stays unsaved). */
 async function save(): Promise<boolean> {
+  const d = hist.doc;
   try {
-    await ipc.saveImage(await exportPng(img, hist.doc, u, W, H));
-    hist.markSaved();
+    await ipc.saveImage(await exportPng(img, d, u, W, H));
+    if (hist.doc === d) hist.markSaved();
     render();
-    return true;
+    return hist.doc === d;
   } catch (e) {
     await fail("Couldn't save", e);
     return false;

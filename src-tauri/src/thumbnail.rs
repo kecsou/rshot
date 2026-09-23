@@ -135,8 +135,10 @@ mod tests {
             std::os::unix::fs::symlink(&dir, &link).unwrap();
             let given = link.join("edited.png");
             let got = super::check(given.to_str().unwrap(), None, &open);
+            let other = super::check(link.join("other.png").to_str().unwrap(), None, &open);
             std::fs::remove_file(&link).unwrap();
             assert_eq!(got, Ok(given));
+            assert!(other.is_err());
         }
         std::fs::remove_dir_all(&dir).unwrap();
     }
