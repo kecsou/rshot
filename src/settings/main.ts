@@ -95,6 +95,7 @@ void ipc
   .listMics()
   .then((ms) => {
     ms.forEach((m) => micSel.add(new Option(m.label, m.id)));
+    if (s.mic && !ms.some((m) => m.id === s.mic)) micSel.add(new Option(`${s.mic} (unavailable)`, s.mic));
     render();
   })
   .catch(() => {});

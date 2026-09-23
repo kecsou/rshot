@@ -122,13 +122,28 @@ fn put_back(v: &str) -> Put<'_> {
     }
 }
 
+/// Whether a key read back after a reset still needs its original set (GVariant text compared as
+/// lists, so quoting and spacing don't matter).
+fn differs(after_reset: &str, original: &str) -> bool {
+    parse_strv(after_reset) != parse_strv(original)
+}
+
 pub fn restore(cfg: &mut Config) -> Result<(), String> {
     let backup = cfg.gnome_backup.clone().unwrap_or_default();
     for (k, v) in &backup {
         match put_back(v) {
-            Put::Set(v) => gs(&["set", SHELL, k, v])?,
-            Put::Reset => gs(&["reset", SHELL, k])?,
-        };
+            // Through the default first: an original equal to it (the usual case) then leaves no
+            // user value behind in dconf.
+            Put::Set(v) => {
+                gs(&["reset", SHELL, k])?;
+                if differs(&gs(&["get", SHELL, k])?, v) {
+                    gs(&["set", SHELL, k, v])?;
+                }
+            }
+            Put::Reset => {
+                gs(&["reset", SHELL, k])?;
+            }
+        }
     }
     // A taken key with no backup (config.toml lost, then "Not now") may still hold rshot's `[]`.
     for k in TAKEN_KEYS.iter().filter(|k| !backup.contains_key(**k)) {
@@ -138,12 +153,12 @@ pub fn restore(cfg: &mut Config) -> Result<(), String> {
     }
     cfg.gnome_backup = None;
     let list = parse_strv(&gs(&["get", MEDIA, "custom-keybindings"])?);
-    gs(&[
-        "set",
-        MEDIA,
-        "custom-keybindings",
-        &format_strv(&without_paths(&list, &our_paths())),
-    ])?;
+    let rest = without_paths(&list, &our_paths());
+    if rest.is_empty() {
+        gs(&["reset", MEDIA, "custom-keybindings"])?;
+    } else {
+        gs(&["set", MEDIA, "custom-keybindings", &format_strv(&rest)])?;
+    }
     for (id, _) in OURS {
         let _ = gs(&["reset-recursively", &format!("{CUSTOM}:{}", path(id))]);
     }
@@ -152,7 +167,7 @@ pub fn restore(cfg: &mut Config) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{gsettings_ok, outdated, put_back, Put, TAKEN_KEYS};
+    use super::{differs, gsettings_ok, outdated, put_back, Put, TAKEN_KEYS};
     use crate::store::Config;
 
     #[test]
@@ -175,6 +190,17 @@ mod tests {
             ..Config::default()
         }));
         assert!(!outdated(&Config::default()));
+    }
+
+    #[test]
+    fn an_original_equal_to_the_default_is_not_set() {
+        assert!(!differs("['Print']", "['Print']"));
+        assert!(!differs(
+            "['<Ctrl><Shift><Alt>R']",
+            "[\"<Ctrl><Shift><Alt>R\"]"
+        ));
+        assert!(differs("['Print']", "['<Super>Print']"));
+        assert!(differs("['Print']", "['Print', 'F12']"));
     }
 
     #[test]

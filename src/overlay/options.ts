@@ -33,6 +33,8 @@ function fillMics() {
     .then((mics) => {
       micSel.length = 1; // keep "None"
       mics.forEach((m) => micSel.add(new Option(m.label, m.id)));
+      const mic = opts?.mic;
+      if (mic && !mics.some((m) => m.id === mic)) micSel.add(new Option(`${mic} (unavailable)`, mic));
       if (opts) renderOptions(opts);
     })
     .catch(() => {});

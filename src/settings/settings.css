@@ -14,7 +14,7 @@ h5 { font: 600 12px Inter; color: var(--text-2); margin: 0 0 7px 4px; }
 .switch { width: 36px; height: 22px; border-radius: 11px; }
 .switch::after { width: 18px; height: 18px; }
 .switch.on::after { left: 16px; }
-.fld { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; background: var(--fill); font: 500 12px Inter; color: rgba(255, 255, 255, 0.85); max-width: 380px; }
+.fld { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; background-color: var(--fill); font: 500 12px Inter; color: rgba(255, 255, 255, 0.85); max-width: 380px; }
 .fld span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fld .ic { width: 14px; height: 14px; color: var(--text-2); }
 .seg button { padding: 5px 12px; }
@@ -28,5 +28,4 @@ h5 { font: 600 12px Inter; color: var(--text-2); margin: 0 0 7px 4px; }
 .err code { font: 500 11px ui-monospace, monospace; background: rgba(0, 0, 0, 0.3); padding: 2px 6px; border-radius: 5px; user-select: text; -webkit-user-select: text; }
 footer { display: flex; justify-content: space-between; font: 500 11.5px Inter; color: var(--text-3); padding: 2px 4px; }
 .link { color: var(--accent); font: 500 12px Inter; }
-select.fld { appearance: none; border: 0; color: rgba(255, 255, 255, 0.85); padding-right: 28px; background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center / 12px; max-width: 320px; }
-select.fld option { background: #232328; }
+select.fld { border: 0; padding-right: 28px; max-width: 320px; }

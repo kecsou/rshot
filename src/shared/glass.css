@@ -27,6 +27,9 @@
 html, body { background: transparent; user-select: none; -webkit-user-select: none; }
 [hidden] { display: none !important; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: default; }
+/* A native select drawn like a field, with a chevron (a field class sets only background-color). */
+select { appearance: none; background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center / 12px; }
+select option { background: #232328; }
 /* Mouse clicks leave no focus ring; keyboard focus keeps it. */
 :focus:not(:focus-visible) { outline: none; }
 

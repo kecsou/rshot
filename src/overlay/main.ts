@@ -230,6 +230,8 @@ addEventListener('dblclick', (e) => {
 
 addEventListener('keydown', (e) => {
   if (!info || busy) return;
+  // A focused control (the mic picker, a switch) keeps Space and the arrows for itself.
+  if ((e.target as Element).closest('select, input, button') && (e.key === ' ' || e.key.startsWith('Arrow'))) return;
   if (e.key === 'Escape') {
     if (optionsOpen()) closeOptions();
     else void ipc.overlayCancel();
@@ -257,6 +259,7 @@ bar.addEventListener('click', (e) => {
 });
 
 void listen<number>('overlay:show', () => void load().catch(() => {}));
+void listen<ipc.OverlayOptions>('overlay:options', (e) => renderOptions(e.payload));
 void listen<Mode>('overlay:mode', (e) => {
   mode = e.payload;
   if (!isArea()) drag = null;

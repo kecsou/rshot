@@ -400,20 +400,27 @@ pub struct Pending {
     pub secs: u8,
 }
 
+/// Saves the popover's options, then hands them to every overlay (one per monitor), so none of
+/// them writes a stale copy back on its next change.
 #[tauri::command]
 pub fn set_overlay_options(
+    app: AppHandle,
     state: State<'_, AppState>,
     options: OverlayOptions,
 ) -> Result<(), String> {
-    let mut c = state.config.lock().unwrap();
-    c.timer_secs = options.timer_secs;
-    c.show_thumbnail = options.show_thumbnail;
-    c.remember_selection = options.remember_selection;
-    c.show_pointer = options.show_pointer;
-    c.screenshots_dir =
-        store::dir_setting(&options.screenshots_dir, &store::default_screenshots_dir());
-    c.mic = options.mic;
-    store::save_config(&c).map_err(err)
+    let saved = {
+        let mut c = state.config.lock().unwrap();
+        c.timer_secs = options.timer_secs;
+        c.show_thumbnail = options.show_thumbnail;
+        c.remember_selection = options.remember_selection;
+        c.show_pointer = options.show_pointer;
+        c.screenshots_dir =
+            store::dir_setting(&options.screenshots_dir, &store::default_screenshots_dir());
+        c.mic = options.mic;
+        store::save_config(&c).map_err(err)?;
+        OverlayOptions::from_config(&c)
+    };
+    app.emit("overlay:options", saved).map_err(err)
 }
 
 #[tauri::command]

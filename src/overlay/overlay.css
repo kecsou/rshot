@@ -42,9 +42,8 @@ body[data-mode='window'], body[data-mode='screen'] { cursor: pointer; }
 
 #pop { position: fixed; left: 50%; bottom: calc(4.5vh + 52px); transform: translateX(-50%); width: 430px; padding: 14px; border-radius: 14px; font: 500 12px Inter; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 18px; background: var(--glass-strong); }
 #pop .full { grid-column: 1 / -1; height: 1px; background: rgba(255, 255, 255, 0.1); margin: -4px 0; }
-#pop .field { width: 100%; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border-radius: 7px; background: var(--fill); border: 1px solid var(--fill); }
+#pop .field { width: 100%; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border-radius: 7px; background-color: var(--fill); border: 1px solid var(--fill); }
 #pop .field .grow { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 #pop .toggles { grid-column: 1; }
-#pop select.field { appearance: none; font: inherit; color: inherit; padding-right: 26px; background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center / 12px; }
-#pop select.field option { background: #232328; }
+#pop select.field { font: inherit; color: inherit; padding-right: 26px; }
 #pop .tog { display: flex; align-items: center; justify-content: space-between; height: 26px; gap: 10px; }
