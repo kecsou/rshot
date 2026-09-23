@@ -72,6 +72,9 @@ export function distToSeg(p: Pt, a: Pt, b: Pt): number {
 const inside = (r: Rect, p: Pt, pad: number) =>
   p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
 
+const nearPath = (pts: Pt[], p: Pt, reach: number) =>
+  pts.some((q, i) => distToSeg(p, pts[Math.max(0, i - 1)], q) <= reach);
+
 /** Strokes hit near their line; rectangles and ellipses on their outline; the rest inside their box. */
 export function hitShape(s: Shape, p: Pt, tol: number, u = 1): boolean {
   const reach = tol + strokeWidth(s, u) / 2;
@@ -81,7 +84,7 @@ export function hitShape(s: Shape, p: Pt, tol: number, u = 1): boolean {
       return distToSeg(p, s.a, s.b) <= reach;
     case 'pen':
     case 'highlight':
-      return s.pts.some((q, i) => distToSeg(p, s.pts[Math.max(0, i - 1)], q) <= reach);
+      return nearPath(s.pts, p, reach);
     case 'rect': {
       const r = norm(s.a, s.b);
       const edge = Math.min(Math.abs(p.x - r.x), Math.abs(p.x - r.x - r.w), Math.abs(p.y - r.y), Math.abs(p.y - r.y - r.h));
@@ -91,9 +94,12 @@ export function hitShape(s: Shape, p: Pt, tol: number, u = 1): boolean {
       const r = norm(s.a, s.b);
       const rx = r.w / 2;
       const ry = r.h / 2;
-      if (!rx || !ry) return false;
-      const d = Math.hypot((p.x - r.x - rx) / rx, (p.y - r.y - ry) / ry);
-      return Math.abs(d - 1) * Math.min(rx, ry) <= reach;
+      // ponytail: 64-segment outline, error <= 0.12% of the radius; add samples if huge ellipses need sub-px hits.
+      const outline = Array.from({ length: 65 }, (_, i) => {
+        const t = (i / 64) * 2 * Math.PI;
+        return { x: r.x + rx + rx * Math.cos(t), y: r.y + ry + ry * Math.sin(t) };
+      });
+      return nearPath(outline, p, reach);
     }
     default:
       return inside(bounds(s, u), p, tol);
@@ -177,8 +183,8 @@ export function fitZoom(w: number, h: number, vw: number, vh: number): number {
 }
 
 export function zoomStep(z: number, dir: 1 | -1): number {
-  if (dir > 0) return ZOOMS.find((s) => s > z + 1e-6) ?? ZOOMS[ZOOMS.length - 1];
-  return [...ZOOMS].reverse().find((s) => s < z - 1e-6) ?? ZOOMS[0];
+  if (dir > 0) return ZOOMS.find((s) => s > z + 1e-6) ?? Math.max(z, ZOOMS[ZOOMS.length - 1]);
+  return [...ZOOMS].reverse().find((s) => s < z - 1e-6) ?? Math.min(z, ZOOMS[0]);
 }
 
 /** Largest rect of `ratio` centred in `r`. */

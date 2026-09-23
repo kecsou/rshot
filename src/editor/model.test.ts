@@ -36,6 +36,20 @@ describe('hit testing', () => {
     expect(M.hitShape(s, { x: 1, y: 25 }, 3)).toBe(true);
     expect(M.hitShape(s, { x: 50, y: 25 }, 3)).toBe(false);
   });
+  it('hits an ellipse near its outline only, even when elongated', () => {
+    const s: M.Shape = { id: 1, kind: 'ellipse', a: { x: 0, y: 0 }, b: { x: 400, y: 40 }, color: '#fff', width: 1 };
+    expect(M.hitShape(s, { x: 200, y: 1 }, 3)).toBe(true);
+    expect(M.hitShape(s, { x: 430, y: 20 }, 3)).toBe(false); // 30 px past the tip
+    expect(M.hitShape(s, { x: 350, y: 20 }, 3)).toBe(false); // inside, ~13 px from the stroke
+    const flat: M.Shape = { ...s, b: { x: 400, y: 0 } };
+    expect(M.hitShape(flat, { x: 200, y: 2 }, 3)).toBe(true);
+  });
+  it('hits a pen stroke near any segment', () => {
+    const s: M.Shape = { id: 1, kind: 'pen', pts: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], color: '#fff', width: 0 };
+    expect(M.hitShape(s, { x: 5, y: 1 }, 3)).toBe(true);
+    expect(M.hitShape(s, { x: 11, y: 8 }, 3)).toBe(true);
+    expect(M.hitShape(s, { x: 5, y: 5 }, 3)).toBe(false);
+  });
   it('hitTest returns the top-most shape', () => {
     const d = doc(rect(1, { x: 0, y: 0 }, { x: 100, y: 100 }), arrow(2, { x: 0, y: 0 }, { x: 100, y: 0 }));
     expect(M.hitTest(d, { x: 50, y: 1 }, 3)?.id).toBe(2);
@@ -47,6 +61,14 @@ describe('hit testing', () => {
 describe('editing', () => {
   it('translate moves every point', () => {
     expect(M.translate(arrow(1, { x: 0, y: 0 }, { x: 10, y: 10 }), 5, -2)).toMatchObject({ a: { x: 5, y: -2 }, b: { x: 15, y: 8 } });
+  });
+  it('handles gives normalised corners for boxes', () => {
+    expect(M.handles(rect(1, { x: 50, y: 10 }, { x: 10, y: 40 }))).toEqual([
+      { id: 'nw', p: { x: 10, y: 10 } },
+      { id: 'ne', p: { x: 50, y: 10 } },
+      { id: 'sw', p: { x: 10, y: 40 } },
+      { id: 'se', p: { x: 50, y: 40 } },
+    ]);
   });
   it('dragHandle keeps the opposite corner fixed', () => {
     const s = rect(1, { x: 10, y: 10 }, { x: 50, y: 40 });
@@ -87,6 +109,20 @@ describe('History', () => {
     expect(h.canRedo).toBe(false);
     expect(new M.History(doc()).undo()).toBe(false);
   });
+  it('canUndo follows the stack; undoing back to the saved snapshot clears dirty', () => {
+    const h = new M.History(doc());
+    expect(h.canUndo).toBe(false);
+    h.commit(doc(counter(1, 1)));
+    expect(h.canUndo).toBe(true);
+    h.markSaved();
+    h.commit(doc(counter(1, 1), counter(2, 2)));
+    expect(h.dirty).toBe(true);
+    h.undo();
+    expect(h.dirty).toBe(false);
+    h.undo();
+    expect(h.canUndo).toBe(false);
+    expect(h.dirty).toBe(true);
+  });
 });
 
 describe('zoom and crop', () => {
@@ -98,6 +134,12 @@ describe('zoom and crop', () => {
     expect(M.zoomStep(1, 1)).toBe(1.25);
     expect(M.zoomStep(0.8, -1)).toBe(0.75);
     expect(M.zoomStep(4, 1)).toBe(4);
+  });
+  it('zoomStep never reverses direction off the ends of the ladder', () => {
+    expect(M.zoomStep(0.08, -1)).toBeLessThanOrEqual(0.08);
+    expect(M.zoomStep(0.08, 1)).toBe(0.1);
+    expect(M.zoomStep(5, 1)).toBeGreaterThanOrEqual(5);
+    expect(M.zoomStep(5, -1)).toBe(4);
   });
   it('fitRatio centres the largest rect of that ratio', () => {
     expect(M.fitRatio({ x: 0, y: 0, w: 200, h: 100 }, 1)).toEqual({ x: 50, y: 0, w: 100, h: 100 });
