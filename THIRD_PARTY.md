@@ -30,15 +30,3 @@ and trimming. These builds are licensed under the GNU GPL v3 (they enable GPL co
 - Where these files are installed: next to this file, in `/usr/lib/rshot/` on Linux, in rshot's install folder on
   Windows (`%LOCALAPPDATA%\rshot`), and in `rshot.app/Contents/Resources/` on macOS. In a checkout,
   `scripts/fetch-ffmpeg.sh` fetches the licence to `src-tauri/binaries/`.
-
-## Before the first public release (owner)
-
-These licensing gaps are known and left to the owner:
-
-- Corresponding source: releases carry FFmpeg, x264 and the two build-script trees. The other GPL libraries in the
-  builds (x265, xavs2, davs2, xvid, rubberband, vid.stab, frei0r, zvbi, fftw3, libdvdread/libdvdnav, …) are only
-  pinned by those scripts; mirror their source too, or publish a written offer.
-- `FFMPEG-NOTICES.txt` doesn't include lame's and xvid's licence files (Subversion sources the script doesn't fetch),
-  and AviSynth+, nv-codec-headers (3 commits) and libglvnd keep their licence only in their source files.
-- The notices come from BtbN's pins; the macOS build links the same libraries at the versions Martin Riedl's script
-  pins, which weren't fetched separately.

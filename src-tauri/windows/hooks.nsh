@@ -1,3 +1,12 @@
+!macro NSIS_HOOK_PREINSTALL
+  ; Installing over a rshot the installer didn't uninstall first ("Don't uninstall", /UPDATE): the
+  ; same as below, before its files are replaced.
+  ${If} ${FileExists} "$INSTDIR\${MAINBINARYNAME}.exe"
+    !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+    ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" restore-shortcuts --keep-consent'
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_PREUNINSTALL
   ; Close rshot first: a running one keeps its keyboard hook and its own copy of the settings.
   !insertmacro CheckIfAppIsRunning "${MAINBINARYNAME}.exe" "${PRODUCTNAME}"

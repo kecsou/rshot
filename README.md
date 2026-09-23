@@ -93,6 +93,9 @@ Automatic takeover works on GNOME. Elsewhere, bind `rshot capture area|screen|wi
 - Windows: Settings can't record `Win+…` or `PrtScn` combos, because the shell takes them before rshot sees them.
   Write them into `[shortcuts]` in `%APPDATA%\rshot\config.toml` instead (for example `record = "Super+Shift+R"`),
   then restart rshot.
+- Windows: while an elevated window (an admin terminal, Task Manager) has focus, rshot's keyboard hook doesn't see
+  the keys (Windows' UIPI), so they do what Windows does with them: PrtScn copies the screen, Win+Shift+S opens the
+  Snipping Tool.
 - Windows: the trimmer plays the video from rshot over `http://127.0.0.1`. If a WebView2 update starts blocking
   local-network requests, it shows "Can't play this video here"; the file and its copied path are unaffected.
 - Fedora: the trimmer needs an H.264 decoder. The `.rpm` recommends `gstreamer1-plugin-openh264` (Fedora's Cisco
@@ -120,6 +123,14 @@ workflow artifacts. Then run the manual checklist in the design spec (§6) on ea
   - Quit gives PrtScn and Win+Shift+S back to Windows; starting rshot again takes them again.
   - Holding PrtScn down captures once, not once per key repeat.
   - Killing `rshot.exe` (Task Manager) mid-recording stops its ffmpeg too (Job object).
+  - No console window flashes when recording, trimming, listing microphones or making a video's poster, and none
+    shows up in a recording.
+  - Releasing Win after Win+Shift+S or Win+PrtScn doesn't open Start, and releasing Alt after Alt+PrtScn doesn't open
+    the focused app's menu (the `0xE8` dummy key).
+  - Settings can record again a Ctrl or Alt combo rshot has taken (the hook lets keys through meanwhile).
+  - The shutter sound plays.
+  - Signing out or restarting with **Launch at login** off, then pressing PrtScn: Windows' own behaviour (rshot gave
+    the keys back as it exited). Signing out mid-recording: the next launch recovers the recording.
 - **macOS:**
   - The universal `.dmg` on Apple silicon and Intel; `xattr`; Screen Recording and Microphone prompts, and after an
     update.
@@ -135,8 +146,35 @@ workflow artifacts. Then run the manual checklist in the design spec (§6) on ea
     (Retina), and whether `AVCaptureScreenInput` still works on current macOS.
   - Whether the firewall prompts when rshot's loopback video server listens; the trimmer plays the video (ATS).
   - Left-clicking the menu bar icon stops a recording.
-  - Quit gives ⌘⇧3/4/5 back to macOS; starting rshot again takes them again.
+  - Quit gives ⌘⇧3/4/5 back to macOS; starting rshot again takes them again. After Quit,
+    `/Applications/rshot.app/Contents/MacOS/rshot restore-shortcuts` keeps them working, and the next launch leaves
+    them to macOS.
+  - ⌘Q with a rshot window (Settings) focused gives ⌘⇧3/4/5 back too, and so does logging out; logging out
+    mid-recording, the next launch recovers the recording.
+  - Kill rshot while it holds the keys (`kill -9`), delete `config.toml`, start rshot, choose **Use rshot**, then turn
+    the takeover off: ⌘⇧3/4/5 come back (from the backup's copy in rshot's own defaults).
+  - The ⌃⌘⇧3 and ⌃⌘⇧4 variants.
+  - A letter shortcut on an AZERTY layout binds the key that types that letter (Carbon layout mapping).
+  - No Dock icon; Settings and onboarding come to the front (Accessory activation policy).
+  - The template menu bar icon in light and dark menu bars, and the red icon while recording.
+  - The shutter sound plays (`afplay`).
+  - Choosing **Not now** at onboarding still shows the Screen Recording step, and the first capture from the menu
+    bar works once it's granted.
   - The microphone, saved by name, is still found after unplugging and replugging it.
+  - Record with the bundled macOS ffmpeg and check that `strings Recording.mp4 | grep -m1 'x264 - core'` names the
+    x264 commit `THIRD_PARTY.md` infers (`0480cb05`).
+
+### Before the first public release
+
+These licensing gaps are known and left to the owner:
+
+- Corresponding source: releases carry FFmpeg, x264 and the two build-script trees. The other GPL libraries in the
+  builds (x265, xavs2, davs2, xvid, rubberband, vid.stab, frei0r, zvbi, fftw3, libdvdread/libdvdnav, …) are only
+  pinned by those scripts; mirror their source too, or publish a written offer.
+- `FFMPEG-NOTICES.txt` doesn't include lame's and xvid's licence files (Subversion sources the script doesn't fetch),
+  and AviSynth+, nv-codec-headers (3 commits) and libglvnd keep their licence only in their source files.
+- The notices come from BtbN's pins; the macOS build links the same libraries at the versions Martin Riedl's script
+  pins, which weren't fetched separately.
 
 ## Develop
 

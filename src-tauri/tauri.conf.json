@@ -31,6 +31,7 @@
     "publisher": "kecsou",
     "category": "Utility",
     "shortDescription": "Screenshots whose path lands on your clipboard",
+    "longDescription": "rshot replaces the system screenshot tool, shortcuts included. Every capture puts its absolute file path on the clipboard next to the file and the image, so a terminal or an AI agent gets a path and a chat app gets the picture. It also records the screen to MP4, with an optional microphone, and trims recordings.",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "resources": { "sounds/shutter.wav": "sounds/shutter.wav" },
     "linux": {
