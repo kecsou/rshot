@@ -86,10 +86,16 @@ pub fn delete_capture(
 ) -> Result<(), String> {
     std::fs::remove_file(guard(&state, &path)?).map_err(err)?;
     ui::close_prefix(&app, "thumbnail");
+    // Forget it (Open Last Capture, a new card) unless a newer capture already took its place.
+    let mut last = state.last_capture.lock().unwrap();
+    if last.as_ref().is_some_and(|l| !l.exists()) {
+        *last = None;
+        *state.thumb.lock().unwrap() = None;
+    }
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn retry_copy(state: State<'_, AppState>, path: String) -> Result<(), String> {
     let p = guard(&state, &path)?;
     let png = std::fs::read(&p).map_err(err)?;
@@ -99,11 +105,6 @@ pub fn retry_copy(state: State<'_, AppState>, path: String) -> Result<(), String
         t.copied = true;
     }
     Ok(())
-}
-
-#[tauri::command]
-pub fn dismiss_thumbnail(app: AppHandle) {
-    ui::close_prefix(&app, "thumbnail");
 }
 
 #[cfg(test)]

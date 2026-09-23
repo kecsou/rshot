@@ -67,7 +67,8 @@ pub fn get_settings(app: AppHandle, state: State<'_, AppState>) -> Settings {
     snapshot(&app, &state.config.lock().unwrap(), None)
 }
 
-#[tauri::command]
+/// Async (off the main thread) here and below: up to ~13 gsettings runs.
+#[tauri::command(async)]
 pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings) -> Settings {
     let mut c = state.config.lock().unwrap();
     let mut error = None;
@@ -105,7 +106,7 @@ pub fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: Settin
     snapshot(&app, &c, error)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn onboarding_choice(
     app: AppHandle,
     state: State<'_, AppState>,

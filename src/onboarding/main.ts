@@ -29,11 +29,15 @@ document.querySelector('#no')!.addEventListener('click', async () => {
   }
 });
 
-document.querySelector('#yes')!.addEventListener('click', async () => {
+const yes = document.querySelector<HTMLButtonElement>('#yes')!;
+// Once: after a failed takeover the button only closes the window, it never retries.
+yes.addEventListener('click', async () => {
   try {
     await ipc.onboardingChoice(true);
     await ipc.closeWindow();
   } catch (e) {
+    yes.textContent = 'Close';
+    yes.onclick = () => void ipc.closeWindow();
     const manual = (await ipc.getSettings()).manual;
     document.querySelector<HTMLElement>('#keys')!.hidden = true; // the error lists the keys with their commands
     err.hidden = false;
@@ -43,8 +47,5 @@ document.querySelector('#yes')!.addEventListener('click', async () => {
       code.textContent = `${k} → ${c}`;
       err.appendChild(code);
     }
-    const yes = document.querySelector<HTMLButtonElement>('#yes')!;
-    yes.textContent = 'Close';
-    yes.onclick = () => void ipc.closeWindow();
   }
-});
+}, { once: true });

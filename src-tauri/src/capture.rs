@@ -100,9 +100,10 @@ pub fn encode_png(img: &RgbaImage) -> Result<Vec<u8>, String> {
 }
 
 /// Visible windows that intersect the frame, top-most first (xcap lists top → bottom).
-pub fn windows_on(f: &Frame) -> Vec<WinRect> {
+/// Windows overlapping the monitor at (x, y) sized `fw`×`fh`, relative to it.
+pub fn windows_on(x: i32, y: i32, fw: u32, fh: u32) -> Vec<WinRect> {
     let me = std::process::id();
-    let (fw, fh) = (f.image.width() as i32, f.image.height() as i32);
+    let (fw, fh) = (fw as i32, fh as i32);
     xcap::Window::all()
         .unwrap_or_default()
         .into_iter()
@@ -114,8 +115,8 @@ pub fn windows_on(f: &Frame) -> Vec<WinRect> {
                 id: w.id().ok()?,
                 title: w.title().unwrap_or_default(),
                 app: w.app_name().unwrap_or_default(),
-                x: w.x().ok()? - f.x,
-                y: w.y().ok()? - f.y,
+                x: w.x().ok()? - x,
+                y: w.y().ok()? - y,
                 w: w.width().ok()?,
                 h: w.height().ok()?,
             };

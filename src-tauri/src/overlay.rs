@@ -115,35 +115,41 @@ pub fn start(app: &AppHandle, mode: &str) -> Result<(), String> {
     app.emit("overlay:show", token).map_err(err)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn overlay_info(window: WebviewWindow, state: State<'_, AppState>) -> Option<OverlayInfo> {
     let index = ui::overlay_index(window.label())?;
-    let session = state.session.lock().unwrap();
-    let s = session.as_ref()?;
-    let f = s.frames.get(index)?;
-    let c = state.config.lock().unwrap();
-    let selection = c
-        .last_selection
-        .as_ref()
-        .filter(|l| c.remember_selection && l.monitor == f.name)
-        .map(|l| Rect {
-            x: l.x.into(),
-            y: l.y.into(),
-            w: l.w.into(),
-            h: l.h.into(),
-        });
-    Some(OverlayInfo {
-        token: s.token,
-        mode: s.mode.clone(),
-        index,
-        active: index == s.active,
-        width: f.image.width(),
-        height: f.image.height(),
-        windows: capture::windows_on(f),
-        selection,
-        hints: c.hints_shown <= HINT_SESSIONS,
-        options: OverlayOptions::from_config(&c),
-    })
+    let (mut info, x, y) = {
+        let session = state.session.lock().unwrap();
+        let s = session.as_ref()?;
+        let f = s.frames.get(index)?;
+        let c = state.config.lock().unwrap();
+        let selection = c
+            .last_selection
+            .as_ref()
+            .filter(|l| c.remember_selection && l.monitor == f.name)
+            .map(|l| Rect {
+                x: l.x.into(),
+                y: l.y.into(),
+                w: l.w.into(),
+                h: l.h.into(),
+            });
+        let info = OverlayInfo {
+            token: s.token,
+            mode: s.mode.clone(),
+            index,
+            active: index == s.active,
+            width: f.image.width(),
+            height: f.image.height(),
+            windows: Vec::new(),
+            selection,
+            hints: c.hints_shown <= HINT_SESSIONS,
+            options: OverlayOptions::from_config(&c),
+        };
+        (info, f.x, f.y)
+    };
+    // Listing windows takes ~9 ms: not while holding the locks.
+    info.windows = capture::windows_on(x, y, info.width, info.height);
+    Some(info)
 }
 
 /// Raw RGBA of this overlay's frame (width/height come from overlay_info).

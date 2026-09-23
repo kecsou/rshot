@@ -40,7 +40,11 @@ export const revealCapture = (path: string) => invoke<void>('reveal_capture', { 
 export const openCapture = (path: string) => invoke<void>('open_capture', { path });
 export const deleteCapture = (path: string) => invoke<void>('delete_capture', { path });
 export const retryCopy = (path: string) => invoke<void>('retry_copy', { path });
-export const dismissThumbnail = () => invoke<void>('dismiss_thumbnail');
+export const dismissThumbnail = () => invoke<void>('close_window'); // this card only
+
+export const countdownInfo = () => invoke<number>('countdown_info');
+export const countdownDone = () => invoke<void>('countdown_done');
+export const countdownCancel = () => invoke<void>('countdown_cancel');
 
 export type ClipboardMode = 'path-and-image' | 'path-only';
 export type Shortcuts = { area: string; screen: string; window: string };

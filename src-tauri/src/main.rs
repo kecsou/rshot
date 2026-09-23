@@ -18,6 +18,7 @@ pub fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+/// Lock order: session → config; never hold a mutex across a Tauri call that needs the main thread.
 pub struct AppState {
     pub config: std::sync::Mutex<store::Config>,
     pub clipboard: clipboard::Clipboard,
@@ -83,6 +84,12 @@ fn main() {
         // Must stay the first plugin: a second `rshot …` forwards its argv here and exits.
         .plugin(tauri_plugin_single_instance::init(
             |app, argv, _cwd| match cli::parse(argv.get(1..).unwrap_or_default()) {
+                // rshot launched again (app grid) while running: show it.
+                Ok(cli::Cmd::Daemon) => {
+                    if let Err(e) = ui::open_settings(app) {
+                        pipeline::notify(app, &e);
+                    }
+                }
                 Ok(cmd) => dispatch(app, cmd),
                 Err(e) => eprintln!("rshot: {e}"),
             },
@@ -114,7 +121,6 @@ fn main() {
             thumbnail::open_capture,
             thumbnail::delete_capture,
             thumbnail::retry_copy,
-            thumbnail::dismiss_thumbnail,
             settings::get_settings,
             settings::set_settings,
             settings::onboarding_choice,
