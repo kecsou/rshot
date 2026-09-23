@@ -8,6 +8,8 @@ pub struct Frame {
     pub name: String,
     pub x: i32,
     pub y: i32,
+    /// Physical px per xcap coordinate unit (`to_px`), for the windows listed on it.
+    pub scale: f64,
     pub image: RgbaImage,
 }
 
@@ -32,7 +34,9 @@ pub fn grab_all(show_pointer: bool) -> Result<Vec<Frame>, String> {
     let monitors = xcap::Monitor::all().map_err(err)?;
     let grab = |m: &xcap::Monitor| -> Result<Frame, String> {
         let mut image = m.capture_image().map_err(err)?;
+        let scale = xcap_scale(m);
         let (x, y) = (m.x().map_err(err)?, m.y().map_err(err)?);
+        let (x, y) = (to_px(x, scale), to_px(y, scale));
         if let Some(c) = &cursor {
             cursor::composite(&mut image, c, x, y);
         }
@@ -40,6 +44,7 @@ pub fn grab_all(show_pointer: bool) -> Result<Vec<Frame>, String> {
             name: m.name().unwrap_or_default(),
             x,
             y,
+            scale,
             image,
         })
     };
@@ -57,6 +62,26 @@ pub fn grab_all(show_pointer: bool) -> Result<Vec<Frame>, String> {
     {
         monitors.iter().map(grab).collect()
     }
+}
+
+/// Physical px per xcap coordinate unit: 1, except on macOS, where xcap gives monitor and window
+/// positions in points (2 px each on Retina) while its images are in pixels. Tauri's monitor
+/// positions are points × that monitor's scale too.
+fn xcap_scale(m: &xcap::Monitor) -> f64 {
+    #[cfg(target_os = "macos")]
+    {
+        m.scale_factor().map_or(1.0, f64::from)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = m;
+        1.0
+    }
+}
+
+/// An xcap coordinate in physical px, `scale` px per unit (`xcap_scale`).
+pub fn to_px(v: i32, scale: f64) -> i32 {
+    (f64::from(v) * scale).round() as i32
 }
 
 /// Index of the frame containing the desktop point, or 0.
@@ -110,8 +135,9 @@ pub fn encode_png(img: &RgbaImage) -> Result<Vec<u8>, String> {
 }
 
 /// Visible windows that intersect the frame, top-most first (xcap lists top → bottom).
-/// Windows overlapping the monitor at (x, y) sized `fw`×`fh`, relative to it.
-pub fn windows_on(x: i32, y: i32, fw: u32, fh: u32) -> Vec<WinRect> {
+/// Windows overlapping the monitor at (x, y) sized `fw`×`fh`, relative to it; `scale` is the
+/// frame's (`Frame::scale`).
+pub fn windows_on(x: i32, y: i32, fw: u32, fh: u32, scale: f64) -> Vec<WinRect> {
     let me = std::process::id();
     let (fw, fh) = (fw as i32, fh as i32);
     xcap::Window::all()
@@ -125,10 +151,10 @@ pub fn windows_on(x: i32, y: i32, fw: u32, fh: u32) -> Vec<WinRect> {
                 id: w.id().ok()?,
                 title: w.title().unwrap_or_default(),
                 app: w.app_name().unwrap_or_default(),
-                x: w.x().ok()? - x,
-                y: w.y().ok()? - y,
-                w: w.width().ok()?,
-                h: w.height().ok()?,
+                x: to_px(w.x().ok()?, scale) - x,
+                y: to_px(w.y().ok()?, scale) - y,
+                w: to_px(w.width().ok()? as i32, scale) as u32,
+                h: to_px(w.height().ok()? as i32, scale) as u32,
             };
             let hits = r.w > 0
                 && r.h > 0
@@ -158,6 +184,48 @@ pub fn focused_window_image() -> Result<RgbaImage, String> {
         .find(|w| w.is_focused().unwrap_or(false) && w.pid().ok() != Some(me))
         .ok_or("no focused window")?;
     w.capture_image().map_err(err)
+}
+
+#[cfg(target_os = "macos")]
+mod permission {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGPreflightScreenCaptureAccess() -> bool;
+        fn CGRequestScreenCaptureAccess() -> bool;
+    }
+
+    pub fn granted() -> bool {
+        // SAFETY: no arguments; a plain TCC query.
+        unsafe { CGPreflightScreenCaptureAccess() }
+    }
+
+    /// macOS asks once (a prompt); after that only System Settings can grant it, so open it there.
+    pub fn request() {
+        // SAFETY: no arguments; shows the system prompt the first time only.
+        unsafe {
+            CGRequestScreenCaptureAccess();
+        }
+        let _ = std::process::Command::new("/usr/bin/open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+            .status();
+    }
+}
+
+/// Whether rshot may capture the screen: macOS's Screen Recording permission; always elsewhere.
+pub fn screen_permission() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        permission::granted()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+pub fn request_screen_permission() {
+    #[cfg(target_os = "macos")]
+    permission::request();
 }
 
 #[cfg(target_os = "linux")]
@@ -220,8 +288,20 @@ mod tests {
             name: String::new(),
             x,
             y,
+            scale: 1.0,
             image: RgbaImage::new(w, h),
         }
+    }
+
+    #[test]
+    fn xcap_units_scale_to_physical_px() {
+        // Linux and Windows: already px.
+        assert_eq!(to_px(1920, 1.0), 1920);
+        assert_eq!(to_px(-1080, 1.0), -1080);
+        // macOS: a Retina monitor right of a 1440-point one starts at 2880 px; one above, at -1800.
+        assert_eq!(to_px(1440, 2.0), 2880);
+        assert_eq!(to_px(-900, 2.0), -1800);
+        assert_eq!(to_px(101, 1.5), 152); // rounded, not truncated
     }
 
     #[test]

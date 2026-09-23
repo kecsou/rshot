@@ -2,7 +2,7 @@
 
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle,
 };
 
@@ -45,14 +45,30 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
             &item("quit", "Quit rshot")?,
         ],
     )?;
-    TrayIconBuilder::with_id(TRAY)
-        .icon(
-            app.default_window_icon()
-                .cloned()
-                .expect("bundle icon is configured"),
-        )
-        .tooltip("rshot")
+    let tray = TrayIconBuilder::with_id(TRAY).icon(idle_icon(app));
+    #[cfg(target_os = "macos")]
+    let tray = tray.icon_as_template(true);
+    tray.tooltip("rshot")
         .menu(&menu)
+        // Windows/macOS: while recording, a left click stops it (`recording_started` turns the
+        // menu off for that button). Linux's appindicator trays send no clicks.
+        .on_tray_icon_event(|tray, e| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = e
+            {
+                let app = tray.app_handle().clone();
+                if crate::recorder::is_recording(&app) {
+                    std::thread::spawn(move || {
+                        if let Err(e) = crate::recorder::stop(&app) {
+                            crate::pipeline::notify(&app, &e);
+                        }
+                    });
+                }
+            }
+        })
         .on_menu_event(|app, e| {
             let result = match e.id.as_ref() {
                 "quit" => return quit(app),
@@ -88,10 +104,29 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 const TRAY: &str = "main";
 const RECORD_LABEL: &str = "Record Screen…";
 
-/// `■ m:ss` next to the tray icon; `None` removes it.
+/// The tray icon while not recording: on macOS a black template the menu bar tints, elsewhere the
+/// app icon.
+fn idle_icon(app: &AppHandle) -> tauri::image::Image<'_> {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app;
+        tauri::include_image!("icons/tray-template.png")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        app.default_window_icon()
+            .cloned()
+            .expect("bundle icon is configured")
+    }
+}
+
+/// `■ m:ss` next to the tray icon, and in its tooltip (Windows shows no title); `None` removes it.
 pub fn set_tray_timer(app: &AppHandle, secs: Option<u64>) {
     if let Some(tray) = app.tray_by_id(TRAY) {
-        let _ = tray.set_title(secs.map(|s| format!("■ {}:{:02}", s / 60, s % 60)));
+        let time = secs.map(|s| format!("{}:{:02}", s / 60, s % 60));
+        let _ = tray.set_title(time.as_ref().map(|t| format!("■ {t}")));
+        let tip = time.map_or_else(|| "rshot".into(), |t| format!("rshot — recording {t}"));
+        let _ = tray.set_tooltip(Some(tip));
     }
 }
 
@@ -106,7 +141,8 @@ pub fn recording_started(
         let _ = item.0.set_text("Stop Recording");
     }
     if let Some(tray) = app.tray_by_id(TRAY) {
-        let _ = tray.set_icon(Some(recording_icon()));
+        let _ = tray.set_icon_with_as_template(Some(recording_icon()), false);
+        let _ = tray.set_show_menu_on_left_click(false);
     }
     set_tray_timer(app, Some(0));
     if full {
@@ -231,7 +267,8 @@ pub fn recording_stopped(app: &AppHandle) {
         let _ = item.0.set_text(RECORD_LABEL);
     }
     if let Some(tray) = app.tray_by_id(TRAY) {
-        let _ = tray.set_icon(app.default_window_icon().cloned());
+        let _ = tray.set_icon_with_as_template(Some(idle_icon(app)), true);
+        let _ = tray.set_show_menu_on_left_click(true);
     }
     set_tray_timer(app, None);
     close_prefix(app, "recframe");
@@ -429,6 +466,16 @@ pub fn place_overlays(app: &AppHandle, frames: &[Frame]) -> Result<(), String> {
     for (i, f) in frames.iter().enumerate() {
         let w = overlay_window(app, i).map_err(err)?;
         let pos = PhysicalPosition::new(f.x, f.y);
+        // Simple fullscreen: a borderless window over the menu bar, with no Space of its own and
+        // no animation. `hide_overlays` leaves it, or the menu bar and Dock would stay hidden.
+        #[cfg(target_os = "macos")]
+        {
+            w.set_position(pos).map_err(err)?;
+            w.set_size(PhysicalSize::new(f.image.width(), f.image.height()))
+                .map_err(err)?;
+            w.set_simple_fullscreen(true).map_err(err)?;
+        }
+        #[cfg(not(target_os = "macos"))]
         if w.outer_position().ok() != Some(pos) || !w.is_fullscreen().unwrap_or(false) {
             w.set_fullscreen(false).map_err(err)?;
             w.set_position(pos).map_err(err)?;
@@ -444,6 +491,8 @@ pub fn hide_overlays(app: &AppHandle) {
     for (label, w) in app.webview_windows() {
         if label.starts_with("overlay-") {
             let _ = w.hide();
+            #[cfg(target_os = "macos")]
+            let _ = w.set_simple_fullscreen(false);
         }
     }
     let _ = app.emit("overlay:hide", ());

@@ -24,6 +24,8 @@ export type OverlayInfo = {
   options: OverlayOptions;
   /** Why the record modes are disabled (no ffmpeg, or a recording is running); null: available. */
   record_off: string | null;
+  /** "Show mouse pointer" works here (Linux only); otherwise its toggle is hidden. */
+  pointer_supported: boolean;
 };
 export type Target = { kind: 'area'; rect: Rect } | { kind: 'window'; id: number; rect: Rect } | { kind: 'screen' };
 
@@ -70,6 +72,9 @@ export type Settings = {
   recordings_dir: string;
   mic: string | null;
   fps: number;
+  platform: 'linux' | 'windows' | 'macos';
+  /** macOS's Screen Recording permission; always true elsewhere. */
+  screen_permission: boolean;
 };
 export type BoolSetting = 'launch_at_login' | 'show_thumbnail' | 'shutter_sound' | 'takeover';
 export const getSettings = () => invoke<Settings>('get_settings');
@@ -77,6 +82,8 @@ export const setSettings = (settings: Settings) => invoke<Settings>('set_setting
 export const onboardingChoice = (accept: boolean) => invoke<void>('onboarding_choice', { accept });
 export const openConfig = () => invoke<void>('open_config');
 export const closeWindow = () => invoke<void>('close_window');
+/** macOS: the Screen Recording prompt (first time), then System Settings' pane. */
+export const requestScreenPermission = () => invoke<void>('request_screen_permission');
 /** While Settings records a shortcut, rshot's own keys reach it (Windows' keyboard hook lets them through). */
 export const setRebinding = (on: boolean) => invoke<void>('set_rebinding', { on });
 

@@ -23,11 +23,12 @@
   <body>
     <div class="dlg" data-tauri-drag-region>
       <div class="logo" data-icon="i-logo"></div>
-      <h4>Make rshot your screenshot tool?</h4>
-      <p>rshot will take over these shortcuts from GNOME Screenshot and start when you log in. You can give the shortcuts back at any time in Settings, and uninstalling rshot restores them too.</p>
+      <h4 id="title">Make rshot your screenshot tool?</h4>
+      <p id="text">rshot will take over these shortcuts from your system's screenshot tool and start when you log in. You can give the shortcuts back at any time in Settings.</p>
       <div class="klist" id="keys"></div>
       <div id="err" hidden></div>
-      <div class="acts"><button class="b2" id="no">Not now</button><button class="b1" id="yes">Use rshot</button></div>
+      <div class="acts" id="choice"><button class="b2" id="no">Not now</button><button class="b1" id="yes">Use rshot</button></div>
+      <div class="acts" id="perm" hidden><button class="b2" id="done">Done</button><button class="b1" id="open">Open System Settings</button></div>
     </div>
     <script type="module" src="./main.ts"></script>
   </body>

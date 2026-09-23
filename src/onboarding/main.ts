@@ -11,14 +11,30 @@ const rows: [string, string][] = [
   ['Capture window', s.shortcuts.window],
   ['Record screen', s.shortcuts.record],
 ];
+// Taken too, and not rebindable: PrtScn on Windows, ⌘⇧5 on macOS.
+const wired = ({ windows: 'Print', macos: 'Super+Shift+5' } as Record<string, string>)[s.platform];
+if (wired) rows.splice(1, 0, ['Capture area (with toolbar)', wired]);
+const keys = document.querySelector<HTMLElement>('#keys')!;
 for (const [label, key] of rows) {
   const row = document.createElement('div');
   const kbd = document.createElement('kbd');
-  kbd.textContent = key; // from config.toml: never HTML
+  kbd.textContent = key || 'Not set'; // from config.toml: never HTML
   row.append(label, kbd);
-  document.querySelector('#keys')!.append(row);
+  keys.append(row);
 }
 const err = document.querySelector<HTMLElement>('#err')!;
+
+/** macOS: capturing needs the Screen Recording permission, granted in System Settings. */
+function permissionStep() {
+  document.querySelector('#title')!.textContent = 'Allow screen recording';
+  document.querySelector('#text')!.textContent =
+    'macOS asks once. Turn on rshot in System Settings → Privacy & Security → Screen Recording, then quit and reopen rshot.';
+  keys.hidden = true;
+  document.querySelector<HTMLElement>('#choice')!.hidden = true;
+  document.querySelector<HTMLElement>('#perm')!.hidden = false;
+}
+document.querySelector('#open')!.addEventListener('click', () => void ipc.requestScreenPermission());
+document.querySelector('#done')!.addEventListener('click', () => void ipc.closeWindow());
 
 document.querySelector('#no')!.addEventListener('click', async () => {
   try {
@@ -35,12 +51,13 @@ const yes = document.querySelector<HTMLButtonElement>('#yes')!;
 yes.addEventListener('click', async () => {
   try {
     await ipc.onboardingChoice(true);
-    await ipc.closeWindow();
+    if (s.platform === 'macos' && !s.screen_permission) permissionStep();
+    else await ipc.closeWindow();
   } catch (e) {
     yes.textContent = 'Close';
     yes.onclick = () => void ipc.closeWindow();
     const manual = (await ipc.getSettings()).manual;
-    document.querySelector<HTMLElement>('#keys')!.hidden = true; // the error lists the keys with their commands
+    keys.hidden = true; // the error lists the keys with their commands
     err.hidden = false;
     err.textContent = `Couldn't take over the shortcuts: ${String(e)}. Bind these yourself:`;
     for (const [k, c] of manual) {

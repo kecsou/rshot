@@ -4,7 +4,7 @@ import './overlay.css';
 import { emit, listen } from '@tauri-apps/api/event';
 import { mountIcons } from '../shared/icons';
 import * as ipc from '../shared/ipc';
-import { closeOptions, optionsOpen, renderOptions, toggleOptions } from './options';
+import { closeOptions, optionsOpen, renderOptions, showPointerOption, toggleOptions } from './options';
 import { type Handle, type Rect, clamp, fromPoints, handleAt, move, resize, windowAt } from './selection';
 
 mountIcons();
@@ -87,6 +87,7 @@ async function load() {
     b.title = next.record_off ?? b.getAttribute('aria-label')!;
   });
   renderOptions(next.options);
+  showPointerOption(next.pointer_supported);
   render();
   await ipc.overlayReady(next.token);
 }

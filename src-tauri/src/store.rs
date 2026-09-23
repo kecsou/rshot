@@ -70,7 +70,8 @@ pub struct Config {
     pub onboarded: bool,
     pub takeover: bool,
     pub shortcuts: Shortcuts,
-    /// Original OS shortcut settings (GNOME keybindings / Windows registry), kept while rshot owns them.
+    /// Original OS shortcut settings (GNOME keybindings / Windows registry / macOS symbolic
+    /// hotkeys), kept while rshot owns them.
     pub gnome_backup: Option<BTreeMap<String, String>>,
     pub recordings_dir: Option<PathBuf>,
     /// PulseAudio/PipeWire source id; `None` records no sound.

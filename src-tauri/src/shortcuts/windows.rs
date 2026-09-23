@@ -18,7 +18,7 @@ type Mods = [bool; 4];
 type Binding = (u32, Mods, Cmd);
 
 /// The combos rshot owns: the configured ones, then PrtScn → area (hard-wired while taken over).
-/// An empty shortcut is unbound; one that isn't `combo::takeable` is refused.
+/// An empty shortcut is unbound; a bad one is refused (`combo::bindable`).
 fn bindings(s: &Shortcuts) -> Result<Vec<Binding>, String> {
     let mut out = vec![];
     for (text, cmd) in [
@@ -27,17 +27,9 @@ fn bindings(s: &Shortcuts) -> Result<Vec<Binding>, String> {
         (&s.window, Cmd::CaptureWindow),
         (&s.record, Cmd::Record),
     ] {
-        if text.is_empty() {
-            continue;
+        if let Some(c) = combo::bindable(text)? {
+            out.push((combo::vk(c.key), [c.ctrl, c.alt, c.shift, c.sup], cmd));
         }
-        let c = combo::parse(text)
-            .ok_or_else(|| format!("\"{text}\" isn't a shortcut rshot can take."))?;
-        if !combo::takeable(&c) {
-            return Err(format!(
-                "\"{text}\" needs Ctrl, Alt or Super: without one, rshot would take that key from every app."
-            ));
-        }
-        out.push((combo::vk(c.key), [c.ctrl, c.alt, c.shift, c.sup], cmd));
     }
     out.push((combo::vk(combo::Key::Print), [false; 4], Cmd::CaptureArea));
     Ok(out)

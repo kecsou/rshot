@@ -97,7 +97,7 @@ fn main() {
         libc::mallopt(libc::M_MMAP_THRESHOLD, 1 << 20);
     }
 
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         // Must stay the first plugin: a second `rshot …` forwards its argv here and exits.
         .plugin(tauri_plugin_single_instance::init(
             |app, argv, _cwd| match cli::parse(argv.get(1..).unwrap_or_default()) {
@@ -119,7 +119,11 @@ fn main() {
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
-        ))
+        ));
+    // macOS: rshot's screenshot keys are global shortcuts (shortcuts/macos.rs).
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
+    let app = builder
         .invoke_handler(tauri::generate_handler![
             overlay::overlay_info,
             overlay::overlay_frame,
@@ -151,6 +155,7 @@ fn main() {
             settings::open_config,
             settings::close_window,
             settings::set_rebinding,
+            settings::request_screen_permission,
             recorder::recording_info,
             recorder::recording_stop,
             recorder::recording_discard,
@@ -163,6 +168,9 @@ fn main() {
             }
         })
         .setup(move |app| {
+            // No Dock icon: rshot lives in the menu bar.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             ui::create_tray(app.handle())?;
             ui::ensure_overlays(app.handle())?;
             shortcuts::start(app.handle());

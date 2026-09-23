@@ -3,5 +3,5 @@
   "identifier": "onboarding",
   "description": "First-run dialog",
   "windows": ["onboarding"],
-  "permissions": ["allow-get-settings", "allow-onboarding-choice", "allow-close-window"]
+  "permissions": ["allow-get-settings", "allow-onboarding-choice", "allow-close-window", "allow-request-screen-permission"]
 }

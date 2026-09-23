@@ -38,6 +38,7 @@ fn main() {
             "open_config",
             "close_window",
             "set_rebinding",
+            "request_screen_permission",
             "recording_info",
             "recording_stop",
             "recording_discard",

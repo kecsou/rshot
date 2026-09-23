@@ -26,6 +26,12 @@ pub struct Settings {
     pub recordings_dir: String,
     pub mic: Option<String>,
     pub fps: u8,
+    /// "linux", "windows" or "macos" (read-only, like the two below it).
+    #[serde(default)]
+    pub platform: String,
+    /// macOS's Screen Recording permission; always true elsewhere.
+    #[serde(default)]
+    pub screen_permission: bool,
 }
 
 fn snapshot(app: &AppHandle, c: &store::Config, takeover_error: Option<String>) -> Settings {
@@ -42,6 +48,8 @@ fn snapshot(app: &AppHandle, c: &store::Config, takeover_error: Option<String>) 
         recordings_dir: store::recordings_dir(c).display().to_string(),
         mic: c.mic.clone(),
         fps: c.fps,
+        platform: std::env::consts::OS.to_string(),
+        screen_permission: crate::capture::screen_permission(),
     }
 }
 
@@ -70,7 +78,7 @@ fn take_over_or_roll_back(c: &mut store::Config) -> Result<(), String> {
 
 /// Called at startup: a takeover saved by an older rshot also takes the keys added since (the
 /// record key), so a user who took over before them doesn't keep GNOME's recorder on it. On
-/// Windows it arms the keyboard hook again (the bindings live in-process). A failure switches the
+/// Windows and macOS it takes the keys again (the bindings live in-process). A failure switches the
 /// takeover off, as in Settings, and is returned.
 pub fn catch_up_takeover(c: &mut store::Config) -> Result<(), String> {
     if !shortcuts::outdated(c) {
@@ -154,6 +162,13 @@ pub fn open_config(app: AppHandle, state: State<'_, AppState>) -> Result<(), Str
     app.opener()
         .open_path(store::config_path().to_string_lossy(), None::<&str>)
         .map_err(err)
+}
+
+/// Onboarding's macOS step: the system prompt the first time, System Settings' Screen Recording
+/// pane always. Async: off the main thread while `open` hands the pane over.
+#[tauri::command(async)]
+pub fn request_screen_permission() {
+    crate::capture::request_screen_permission();
 }
 
 /// While Settings records a new shortcut, rshot's own keys must reach it.

@@ -4,6 +4,8 @@
 mod gnome;
 #[cfg(target_os = "linux")]
 pub mod gvariant;
+#[cfg(any(target_os = "macos", test))]
+mod macos;
 #[cfg(any(target_os = "windows", test))]
 mod windows;
 
@@ -36,13 +38,14 @@ pub fn outdated(cfg: &Config) -> bool {
     gnome::outdated(cfg)
 }
 
-/// Windows keeps its bindings in this process: every launch takes a saved takeover again.
-#[cfg(target_os = "windows")]
+/// Windows and macOS keep their bindings in this process: every launch takes a saved takeover
+/// again.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 pub fn outdated(cfg: &Config) -> bool {
     cfg.takeover
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn outdated(_cfg: &Config) -> bool {
     false
 }
@@ -57,12 +60,22 @@ pub fn restore(cfg: &mut Config) -> Result<(), String> {
     windows::restore(cfg)
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(target_os = "macos")]
+pub fn take_over(cfg: &mut Config) -> Result<(), String> {
+    macos::take_over(cfg)
+}
+
+#[cfg(target_os = "macos")]
+pub fn restore(cfg: &mut Config) -> Result<(), String> {
+    macos::restore(cfg)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn take_over(_cfg: &mut Config) -> Result<(), String> {
     Err("Taking over the system shortcuts on this OS arrives in a later version.".into())
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn restore(_cfg: &mut Config) -> Result<(), String> {
     Ok(())
 }
@@ -75,7 +88,12 @@ pub fn release(cfg: &Config) -> Result<(), String> {
     windows::release(cfg)
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+pub fn release(cfg: &Config) -> Result<(), String> {
+    macos::release(cfg)
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 pub fn release(_cfg: &Config) -> Result<(), String> {
     Ok(())
 }
@@ -89,10 +107,13 @@ pub fn pause(on: bool) {
 }
 
 /// Called once at startup, before `settings::catch_up_takeover` (which takes a saved takeover
-/// again where `outdated` says so): Windows installs its keyboard hook. Linux: nothing to do.
+/// again where `outdated` says so): Windows installs its keyboard hook, macOS keeps the handle its
+/// global shortcuts need. Linux: nothing to do.
 pub fn start(app: &tauri::AppHandle) {
     #[cfg(target_os = "windows")]
     windows::install_hook(app.clone());
+    #[cfg(target_os = "macos")]
+    macos::init(app.clone());
     let _ = app;
 }
 
@@ -141,10 +162,11 @@ pub fn command_for(exe: &str, sub: &str) -> String {
     format!("\"{q}\" {sub}")
 }
 
-/// (shortcut, command) pairs to bind by hand on desktops rshot can't configure.
+/// (shortcut, command) pairs to bind by hand on desktops rshot can't configure (unbound actions
+/// left out).
 pub fn manual_commands(c: &Config) -> Vec<(String, String)> {
     let exe = exe_command();
-    vec![
+    let all = [
         (c.shortcuts.area.clone(), command_for(&exe, "capture area")),
         (
             c.shortcuts.screen.clone(),
@@ -155,7 +177,8 @@ pub fn manual_commands(c: &Config) -> Vec<(String, String)> {
             command_for(&exe, "capture window"),
         ),
         (c.shortcuts.record.clone(), command_for(&exe, "record")),
-    ]
+    ];
+    all.into_iter().filter(|(k, _)| !k.is_empty()).collect()
 }
 
 #[cfg(test)]

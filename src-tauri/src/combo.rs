@@ -1,5 +1,5 @@
 //! Neutral shortcut strings ("Ctrl+Alt+Shift+R", "Super+Print") ↔ modifiers + key.
-#![allow(dead_code)] // wired up by Tasks 2–3
+#![cfg_attr(target_os = "linux", allow(dead_code))] // Linux binds through GNOME (gnome.rs)
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
@@ -44,6 +44,21 @@ pub fn parse(s: &str) -> Option<Combo> {
 /// take capitals from every app), except PrtScn. Settings' recorder applies the same rule (keys.ts).
 pub fn takeable(c: &Combo) -> bool {
     c.ctrl || c.alt || c.sup || c.key == Key::Print
+}
+
+/// A configured shortcut as the Windows and macOS takeovers bind it: `None` when empty (unbound),
+/// an error when it doesn't parse or isn't `takeable`.
+pub fn bindable(text: &str) -> Result<Option<Combo>, String> {
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let c = parse(text).ok_or_else(|| format!("\"{text}\" isn't a shortcut rshot can take."))?;
+    if !takeable(&c) {
+        return Err(format!(
+            "\"{text}\" needs Ctrl, Alt or Super: without one, rshot would take that key from every app."
+        ));
+    }
+    Ok(Some(c))
 }
 
 fn parse_key(k: &str) -> Option<Key> {

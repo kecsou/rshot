@@ -122,5 +122,40 @@ fn play_shutter(app: &AppHandle) {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-fn play_shutter(_app: &AppHandle) {} // ponytail: Windows/macOS sound arrives in Plan 4
+#[cfg(target_os = "windows")]
+fn play_shutter(app: &AppHandle) {
+    use tauri::path::BaseDirectory;
+    use windows::{
+        core::HSTRING,
+        Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_FILENAME},
+    };
+    if let Ok(wav) = app
+        .path()
+        .resolve("sounds/shutter.wav", BaseDirectory::Resource)
+    {
+        // SAFETY: the path outlives the call; SND_ASYNC copies what it needs before returning.
+        unsafe {
+            let _ = PlaySoundW(
+                &HSTRING::from(wav.as_os_str()),
+                None,
+                SND_FILENAME | SND_ASYNC,
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn play_shutter(app: &AppHandle) {
+    use tauri::path::BaseDirectory;
+    if let Ok(wav) = app
+        .path()
+        .resolve("sounds/shutter.wav", BaseDirectory::Resource)
+    {
+        // A thread waits on the player so no zombie process is left behind.
+        std::thread::spawn(move || {
+            let _ = std::process::Command::new("/usr/bin/afplay")
+                .arg(wav)
+                .status();
+        });
+    }
+}

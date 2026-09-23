@@ -52,6 +52,11 @@ export function renderOptions(o: ipc.OverlayOptions) {
   micSel.value = o.mic ?? '';
 }
 
+/** "Show mouse pointer" works on Linux only: elsewhere its toggle goes. */
+export function showPointerOption(supported: boolean) {
+  pop.querySelector<HTMLElement>('[data-opt="show_pointer"]')!.closest<HTMLElement>('.tog')!.hidden = !supported;
+}
+
 export const optionsOpen = () => !pop.hidden;
 
 export function closeOptions() {

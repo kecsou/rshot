@@ -76,6 +76,8 @@ pub struct OverlayInfo {
     options: OverlayOptions,
     /// Why the record modes are disabled (the button tooltip); `None` when they're available.
     record_off: Option<&'static str>,
+    /// "Show mouse pointer" works on Linux only (XFixes); elsewhere its toggle is hidden.
+    pointer_supported: bool,
 }
 
 /// The hint bar shows on the first few overlays only.
@@ -132,7 +134,7 @@ pub fn overlay_info(
     state: State<'_, AppState>,
 ) -> Option<OverlayInfo> {
     let index = ui::overlay_index(window.label())?;
-    let (mut info, x, y) = {
+    let (mut info, x, y, scale) = {
         let session = state.session.lock().unwrap();
         let s = session.as_ref()?;
         let f = s.frames.get(index)?;
@@ -159,11 +161,12 @@ pub fn overlay_info(
             hints: c.hints_shown <= HINT_SESSIONS,
             options: OverlayOptions::from_config(&c),
             record_off: None,
+            pointer_supported: cfg!(target_os = "linux"),
         };
-        (info, f.x, f.y)
+        (info, f.x, f.y, f.scale)
     };
     // Listing windows takes ~9 ms: not while holding the locks.
-    info.windows = capture::windows_on(x, y, info.width, info.height);
+    info.windows = capture::windows_on(x, y, info.width, info.height, scale);
     info.record_off = crate::recorder::unavailable(&app);
     Some(info)
 }
