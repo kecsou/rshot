@@ -191,14 +191,26 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("failed to build rshot");
 
-    app.run(|_app, event| {
+    app.run(|app, event| match event {
         // Live in the tray: closing the last window must not quit; only app.exit(code) does.
-        if let RunEvent::ExitRequested { api, code, .. } = event {
-            if code.is_none() {
-                api.prevent_exit();
-            }
-        }
+        RunEvent::ExitRequested { api, code, .. } if code.is_none() => api.prevent_exit(),
+        RunEvent::Exit => exiting(app),
+        _ => {}
     });
+}
+
+/// rshot's last word, after a Quit (`ui::quit`) or without one (macOS ⌘Q or logout, Windows
+/// shutdown or sign-out): the OS gets its screenshot keys back, and a recording's ffmpeg stops.
+/// The config comes from disk (no lock at exit); after a Quit, which released already, releasing
+/// again changes nothing. Linux has nothing to do: GNOME's bindings start rshot, and ffmpeg dies
+/// with it.
+fn exiting(app: &AppHandle) {
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = shortcuts::release(&store::load_config());
+        recorder::end_at_exit(app);
+    }
+    let _ = app;
 }
 
 /// The single-instance plugin's D-Bus name: tauri.conf.json's identifier + ".SingleInstance".

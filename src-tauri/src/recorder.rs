@@ -781,12 +781,12 @@ pub fn is_ending() -> bool {
     matches!(ENDING.try_lock(), Err(std::sync::TryLockError::WouldBlock))
 }
 
-/// Asks ffmpeg to finish (`q`), waits up to 10 s, then kills it.
-fn end(rec: &mut Recording) {
+/// Asks ffmpeg to finish (`q`), waits up to `within`, then kills it.
+fn end(rec: &mut Recording, within: Duration) {
     if let Some(mut stdin) = rec.child.stdin.take() {
         let _ = stdin.write_all(b"q\n");
     }
-    let deadline = Instant::now() + Duration::from_secs(10);
+    let deadline = Instant::now() + within;
     while matches!(rec.child.try_wait(), Ok(None)) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -822,7 +822,7 @@ pub fn stop(app: &AppHandle) -> Result<(), String> {
     let Some(mut rec) = take(app) else {
         return Ok(());
     };
-    end(&mut rec);
+    end(&mut rec, Duration::from_secs(10));
     finalize(&rec.ffmpeg, &rec.mkv, &rec.mp4).map_err(|e| {
         format!(
             "Couldn't finish the recording ({e}). {}",
@@ -830,6 +830,17 @@ pub fn stop(app: &AppHandle) -> Result<(), String> {
         )
     })?;
     pipeline::finish_video(app, &rec.mp4)
+}
+
+/// rshot is exiting without a Quit, which would have stopped the recording (macOS ⌘Q or logout,
+/// Windows shutdown or sign-out): ffmpeg gets ~2 s to close the MKV, which the next launch's
+/// `recover` turns into the MP4. On the main thread, so a stop under way (ENDING) isn't waited for.
+#[cfg(not(target_os = "linux"))]
+pub fn end_at_exit(app: &AppHandle) {
+    let rec = app.state::<AppState>().recording.lock().unwrap().take();
+    if let Some(mut rec) = rec {
+        end(&mut rec, Duration::from_secs(2));
+    }
 }
 
 /// At startup: a recording no rshot finished (logout, shutdown, crash, kill) left its raw MKV in
@@ -897,7 +908,7 @@ pub fn recover(app: &AppHandle) {
 pub fn discard(app: &AppHandle) {
     let _ending = ending();
     if let Some(mut rec) = take(app) {
-        end(&mut rec);
+        end(&mut rec, Duration::from_secs(10));
         let _ = std::fs::remove_file(&rec.mkv);
     }
 }
