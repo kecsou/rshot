@@ -214,6 +214,9 @@ pub fn force_focus(w: &WebviewWindow) {
 
 #[cfg(target_os = "linux")]
 fn present_now(gw: &gtk::Window) {
+    // A preloaded overlay has no GdkWindow until its first show, which may not have run yet:
+    // without one this was a no-op, and the first overlay after any rshot dialog didn't get focus.
+    gw.realize();
     if let Some(gdk) = gw.window() {
         if let Ok(x11) = gdk.downcast::<gdkx11::X11Window>() {
             let t = gdkx11::functions::x11_get_server_time(&x11);
