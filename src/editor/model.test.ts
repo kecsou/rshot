@@ -92,6 +92,13 @@ describe('editing', () => {
     expect(M.bounds(M.dragHandle(s, 'se', { x: 60, y: 60 }))).toEqual({ x: 10, y: 10, w: 50, h: 50 });
     expect(M.dragHandle(arrow(2, { x: 0, y: 0 }, { x: 5, y: 5 }), 'b', { x: 9, y: 1 })).toMatchObject({ b: { x: 9, y: 1 } });
   });
+  it('dragHandle with Shift snaps line ends to 45° and boxes to squares, around the fixed end', () => {
+    expect(M.dragHandle(arrow(1, { x: 0, y: 0 }, { x: 5, y: 5 }), 'b', { x: 10, y: 1 }, true)).toMatchObject({ a: { x: 0, y: 0 }, b: { x: 10, y: 0 } });
+    expect(M.dragHandle(arrow(1, { x: 0, y: 0 }, { x: 5, y: 5 }), 'a', { x: 15, y: 4 }, true)).toMatchObject({ a: { x: 15, y: 5 }, b: { x: 5, y: 5 } });
+    const s = rect(2, { x: 10, y: 10 }, { x: 50, y: 40 });
+    expect(M.bounds(M.dragHandle(s, 'se', { x: 60, y: 30 }, true))).toEqual({ x: 10, y: 10, w: 50, h: 50 });
+    expect(M.bounds(M.dragHandle(s, 'nw', { x: 40, y: 0 }, true))).toEqual({ x: 10, y: 0, w: 40, h: 40 });
+  });
   it('snap45 and squareEnd constrain with Shift', () => {
     expect(M.snap45({ x: 0, y: 0 }, { x: 10, y: 1 })).toEqual({ x: 10, y: 0 });
     expect(M.snap45({ x: 0, y: 0 }, { x: 10, y: 9 })).toEqual({ x: 10, y: 10 });
@@ -139,6 +146,16 @@ describe('History', () => {
     expect(h.canUndo).toBe(false);
     expect(h.dirty).toBe(true);
   });
+  it('markSaved(d) records the snapshot that was written, even after a newer edit', () => {
+    const h = new M.History(doc());
+    const written = doc(counter(1, 1));
+    h.commit(written);
+    h.commit(doc(counter(1, 1), counter(2, 2))); // edited while the save was in flight
+    h.markSaved(written);
+    expect(h.dirty).toBe(true);
+    h.undo();
+    expect(h.dirty).toBe(false);
+  });
 });
 
 describe('zoom and crop', () => {
@@ -163,6 +180,14 @@ describe('zoom and crop', () => {
   it('cropFromDrag constrains to the ratio and to the image', () => {
     expect(M.cropFromDrag({ x: 0, y: 0 }, { x: 160, y: 200 }, 16 / 9, 1000, 1000)).toEqual({ x: 0, y: 0, w: 160, h: 90 });
     expect(M.cropFromDrag({ x: 10, y: 10 }, { x: 2000, y: 50 }, null, 100, 100)).toEqual({ x: 10, y: 10, w: 90, h: 40 });
+  });
+  it('usKey reads non-letter keys by their US-layout spot, never overriding a typed letter', () => {
+    expect(M.usKey({ key: 'à', code: 'Digit0' })).toBe('0'); // AZERTY Ctrl+0
+    expect(M.usKey({ key: '&', code: 'Digit1' })).toBe('1');
+    expect(M.usKey({ key: 'я', code: 'KeyZ' })).toBe('z'); // Cyrillic Ctrl+Z
+    expect(M.usKey({ key: ')', code: 'Minus' })).toBe('-');
+    expect(M.usKey({ key: 'q', code: 'KeyA' })).toBeUndefined(); // AZERTY Q stays Q
+    expect(M.usKey({ key: 'Enter', code: 'Enter' })).toBeUndefined();
   });
   it('viewToImage undoes zoom and crop offset', () => {
     expect(M.viewToImage({ x: 50, y: 20 }, 0.5, { x: 100, y: 10, w: 1, h: 1 })).toEqual({ x: 200, y: 50 });

@@ -16,10 +16,47 @@ const canvas = $<HTMLCanvasElement>('#view');
 const ctx = canvas.getContext('2d')!;
 const texted = $<HTMLTextAreaElement>('#texted');
 
-const info = await ipc.editorInfo();
-const img = await createImageBitmap(new Blob([await ipc.readCapture(info.path)], { type: 'image/png' }));
-// Text boxes are measured on the canvas: measuring with the fallback font would size them wrong.
-await Promise.all(['600', '700'].map((w) => document.fonts.load(`${w} 16px Inter`)));
+let ready = false; // until the capture is loaded, a close request just closes
+// Registered before the awaits below, so the window can always be closed.
+void getCurrentWindow().onCloseRequested(async (e) => {
+  e.preventDefault();
+  if (!ready) await ipc.closeWindow();
+  else if ($('#modal').hidden) await requestClose(); // else a prompt is up: it gets answered first
+});
+
+// A prompt holds the keyboard: Tab cycles its buttons, Esc picks the safe one, Enter the focused one.
+addEventListener(
+  'keydown',
+  (e) => {
+    if ($('#modal').hidden) return;
+    e.stopPropagation();
+    const bs = [...$('#modal-acts').children] as HTMLElement[];
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      (bs.find((b) => b.classList.contains('b2') && !b.classList.contains('danger')) ?? bs[0]).click();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const i = bs.indexOf(document.activeElement as HTMLElement);
+      bs[i < 0 ? 0 : (i + (e.shiftKey ? bs.length - 1 : 1)) % bs.length].focus();
+    }
+  },
+  true,
+);
+
+/** Startup failed: say why, then close (nothing to edit). */
+async function fatal(name: string, e: unknown): Promise<never> {
+  await ask(`Couldn't open ${name}: ${e}`, [{ label: 'OK', value: 'ok', primary: true }]);
+  await ipc.closeWindow();
+  throw e;
+}
+
+const info = await ipc.editorInfo().catch((e) => fatal('the capture', e));
+const img = await ipc
+  .readCapture(info.path)
+  .then((b) => createImageBitmap(new Blob([b], { type: 'image/png' })))
+  // Text boxes are measured on the canvas: measuring with the fallback font would size them wrong.
+  .then(async (bmp) => (await Promise.all(['600', '700'].map((w) => document.fonts.load(`${w} 16px Inter`))), bmp))
+  .catch((e) => fatal(info.name, e));
 const W = img.width;
 const H = img.height;
 const u = M.unitFor(W, H);
@@ -86,6 +123,7 @@ function render() {
   $('#swatch i').style.background = currentColor(tool);
   if (crop) $('#cropdim').textContent = `${Math.round(crop.draft.w)} × ${Math.round(crop.draft.h)}`;
   document.querySelectorAll<HTMLElement>('#ratios [data-ratio]').forEach((b) => b.classList.toggle('on', b.dataset.ratio === crop?.ratio));
+  placeTextarea(); // follows zoom and window resizes while editing
 }
 
 function commit(next: M.Doc) {
@@ -166,7 +204,6 @@ function restyle(s: M.Shape): M.Shape {
 onStyleChange(() => {
   const s = hist.doc.shapes.find((x) => x.id === selectedId);
   if (s) replaceShape(restyle(s));
-  if (editingText) placeTextarea();
   render();
 });
 
@@ -279,7 +316,7 @@ canvas.addEventListener('pointermove', (e) => {
     }
     live = { ...base, shapes: [...base.shapes.filter((x) => x.id !== next.id), next] };
   } else {
-    next = drag.kind === 'move' ? M.translate(drag.orig, p.x - drag.start.x, p.y - drag.start.y) : M.dragHandle(drag.orig, drag.handle, p);
+    next = drag.kind === 'move' ? M.translate(drag.orig, p.x - drag.start.x, p.y - drag.start.y) : M.dragHandle(drag.orig, drag.handle, p, e.shiftKey);
     live = { ...base, shapes: base.shapes.map((x) => (x.id === next.id ? next : x)) };
   }
   paint();
@@ -370,7 +407,11 @@ texted.addEventListener('input', autosize);
 texted.addEventListener('keydown', (e) => {
   e.stopPropagation();
   if (e.isComposing) return; // Enter/Escape belong to the input method while it composes
-  if (e.key === 'Enter' && !e.shiftKey) {
+  const k = [e.key.toLowerCase(), M.usKey(e)].find((x) => x === 's' || x === 'c');
+  if ((e.ctrlKey || e.metaKey) && k) {
+    e.preventDefault();
+    void (k === 's' ? done() : copy()); // both commit the text first
+  } else if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     commitText();
   } else if (e.key === 'Escape') {
@@ -398,7 +439,9 @@ function exitCrop(apply: boolean) {
   crop = null;
   tool = 'select';
   $('#cropbar').hidden = true;
-  if (apply && r.w >= 1 && r.h >= 1) {
+  const cur = hist.doc.crop ?? full();
+  const same = r.x === cur.x && r.y === cur.y && r.w === cur.w && r.h === cur.h;
+  if (apply && !same && r.w >= 1 && r.h >= 1) {
     const whole = r.x === 0 && r.y === 0 && r.w === W && r.h === H;
     commit({ ...hist.doc, crop: whole ? null : r });
   }
@@ -474,19 +517,26 @@ const fail = (what: string, e: unknown) => ask(`${what}: ${e}`, [{ label: 'OK', 
 /** True when what's on screen is now on disk (an edit made during the write stays unsaved). */
 async function save(): Promise<boolean> {
   const d = hist.doc;
+  let copied: boolean;
   try {
-    await ipc.saveImage(await exportPng(img, d, u, W, H));
-    if (hist.doc === d) hist.markSaved();
-    render();
-    return hist.doc === d;
+    copied = await ipc.saveImage(await exportPng(img, d, u, W, H));
   } catch (e) {
     await fail("Couldn't save", e);
     return false;
   }
+  hist.markSaved(d);
+  render();
+  // The file is written either way: a clipboard failure only offers a retry (spec §4).
+  while (!copied && (await ask("Saved, but couldn't copy to the clipboard.", [{ label: 'OK', value: 'ok' }, { label: 'Retry', value: 'retry', primary: true }])) === 'retry') {
+    copied = await ipc.retryCopy(info.path).then(() => true, () => false);
+  }
+  return hist.doc === d;
 }
 
-/** Saves if needed, then puts path + file + image on the clipboard again. */
+/** Saves if needed (typed text and a crop draft included), then puts path + file + image on the clipboard again. */
 async function copy(): Promise<boolean> {
+  commitText();
+  if (crop) exitCrop(true);
   if (hist.dirty) return save();
   try {
     await ipc.retryCopy(info.path);
@@ -505,6 +555,7 @@ async function done() {
 }
 
 async function requestClose() {
+  commitText();
   if (!hist.dirty) return ipc.closeWindow();
   const r = await ask(`Save changes to ${info.name}?`, [
     { label: 'Discard', value: 'discard', danger: true },
@@ -522,11 +573,6 @@ async function remove() {
   ]);
   if (r === 'delete') await ipc.editorDelete().catch((e) => fail("Couldn't delete", e));
 }
-
-void getCurrentWindow().onCloseRequested(async (e) => {
-  e.preventDefault();
-  await requestClose();
-});
 
 // ---------- chrome ----------
 
@@ -567,10 +613,9 @@ $('#rail').addEventListener('click', (e) => {
 
 const KEYS: Record<string, Tool> = { v: 'select', c: 'crop', a: 'arrow', r: 'rect', o: 'ellipse', l: 'line', p: 'pen', h: 'highlight', t: 'text', n: 'counter', b: 'redact' };
 
-addEventListener('keydown', (e) => {
-  if (editingText || !$('#modal').hidden) return;
+/** Handles `k` as the pressed key; false when it means nothing here. */
+function shortcut(e: KeyboardEvent, k: string): boolean {
   const mod = e.ctrlKey || e.metaKey;
-  const k = e.key.toLowerCase();
   if (mod && k === 'z') {
     e.preventDefault();
     if (e.shiftKey) redo();
@@ -620,7 +665,18 @@ addEventListener('keydown', (e) => {
     const [dx, dy] = step[e.key] ?? [0, 0];
     if (s) replaceShape(M.translate(s, dx, dy));
   } else if (!mod && !e.altKey && KEYS[k]) setTool(KEYS[k]);
+  else return false;
+  return true;
+}
+
+addEventListener('keydown', (e) => {
+  if (editingText || !$('#modal').hidden) return;
+  if (!shortcut(e, e.key.toLowerCase())) {
+    const k = M.usKey(e);
+    if (k) shortcut(e, k);
+  }
 });
 
 fit();
 render();
+ready = true;

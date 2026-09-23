@@ -41,7 +41,6 @@
           <button class="b2" id="crop-cancel">Cancel</button>
           <button class="b1" id="crop-apply">Apply ⏎</button>
         </div>
-        <div id="modal" hidden><div class="glass box"><p id="modal-text"></p><div class="acts" id="modal-acts"></div></div></div>
       </div>
       <footer>
         <div class="chip">
@@ -57,6 +56,8 @@
           <button class="b2" id="fit" title="Fit (Ctrl+0)">Fit</button>
         </div>
       </footer>
+      <!-- Covers the whole window, header included: nothing else is clickable while a prompt is up. -->
+      <div id="modal" hidden><div class="glass box" role="alertdialog" aria-modal="true" aria-labelledby="modal-text"><p id="modal-text"></p><div class="acts" id="modal-acts"></div></div></div>
     </div>
     <script type="module" src="./main.ts"></script>
   </body>

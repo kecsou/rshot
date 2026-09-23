@@ -68,7 +68,7 @@ export const closeWindow = () => invoke<void>('close_window');
 export type EditorInfo = { path: string; display: string; name: string };
 export const openEditor = (path: string) => invoke<void>('open_editor', { path });
 export const editorInfo = () => invoke<EditorInfo>('editor_info');
-/** Sends the PNG as a raw IPC body (no JSON/base64 round-trip). */
-export const saveImage = (png: Uint8Array) => invoke<void>('save_image', png);
+/** Sends the PNG as a raw IPC body (no JSON/base64 round-trip). False = written, but not copied. */
+export const saveImage = (png: Uint8Array) => invoke<boolean>('save_image', png);
 export const editorDelete = () => invoke<void>('editor_delete');
 export const copyPath = (path: string) => invoke<void>('copy_path', { path });

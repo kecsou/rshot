@@ -154,8 +154,12 @@ export function handles(s: Shape): { id: HandleId; p: Pt }[] {
   return [];
 }
 
-export function dragHandle(s: Shape, h: HandleId, p: Pt): Shape {
-  if (s.kind === 'arrow' || s.kind === 'line') return h === 'a' ? { ...s, a: p } : { ...s, b: p };
+/** `constrain` (Shift): line ends snap to 45° and boxes to squares around the end that stays put. */
+export function dragHandle(s: Shape, h: HandleId, p: Pt, constrain = false): Shape {
+  if (s.kind === 'arrow' || s.kind === 'line') {
+    const q = constrain ? snap45(h === 'a' ? s.b : s.a, p) : p;
+    return h === 'a' ? { ...s, a: q } : { ...s, b: q };
+  }
   if (s.kind === 'rect' || s.kind === 'ellipse' || s.kind === 'redact') {
     const r = norm(s.a, s.b);
     const opposite: Partial<Record<HandleId, Pt>> = {
@@ -165,7 +169,7 @@ export function dragHandle(s: Shape, h: HandleId, p: Pt): Shape {
       se: { x: r.x, y: r.y },
     };
     const fixed = opposite[h];
-    return fixed ? { ...s, a: fixed, b: p } : s;
+    return fixed ? { ...s, a: fixed, b: constrain ? squareEnd(fixed, p) : p } : s;
   }
   return s;
 }
@@ -221,6 +225,13 @@ export function cropFromDrag(a: Pt, b: Pt, ratio: number | null, W: number, H: n
   return norm(a, { x: a.x + Math.sign(bx - a.x || 1) * w, y: a.y + Math.sign(by - a.y || 1) * h });
 }
 
+/** Shortcut fallback for keys that don't type a Latin letter (AZERTY digit row, Cyrillic): what the
+ *  key at that spot types on a US layout (`Digit0` → 0, `KeyZ` → z, `Equal` → =). A typed letter is kept as is. */
+export function usKey(e: { key: string; code: string }): string | undefined {
+  if (/^[a-z]$/i.test(e.key)) return undefined;
+  return /^(?:Key|Digit)(.)$/.exec(e.code)?.[1].toLowerCase() ?? { Equal: '=', Minus: '-' }[e.code];
+}
+
 export function viewToImage(p: Pt, zoom: number, crop: Rect | null): Pt {
   return { x: p.x / zoom + (crop?.x ?? 0), y: p.y / zoom + (crop?.y ?? 0) };
 }
@@ -257,8 +268,9 @@ export class History {
     return true;
   }
 
-  markSaved(): void {
-    this.saved = this.doc;
+  /** `doc` = the snapshot that was written (an edit made during the write stays unsaved). */
+  markSaved(doc = this.doc): void {
+    this.saved = doc;
   }
 
   get canUndo() {
