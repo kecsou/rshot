@@ -3,5 +3,5 @@
   "identifier": "thumbnail",
   "description": "Post-capture thumbnail card",
   "windows": ["thumbnail-*"],
-  "permissions": ["allow-thumbnail-info", "allow-read-capture", "allow-reveal-capture", "allow-delete-capture", "allow-retry-copy", "allow-close-window", "allow-open-editor", "drag:default"]
+  "permissions": ["allow-thumbnail-info", "allow-read-capture", "allow-reveal-capture", "allow-delete-capture", "allow-retry-copy", "allow-video-poster", "allow-close-window", "allow-open-editor", "drag:default"]
 }

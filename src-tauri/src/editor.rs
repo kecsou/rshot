@@ -2,7 +2,7 @@
 
 use crate::{err, pipeline, store, thumbnail, ui, AppState};
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tauri::{
     ipc::{InvokeBody, Request},
     AppHandle, Manager, State, WebviewWindow,
@@ -13,6 +13,8 @@ pub struct EditorInfo {
     path: String,
     display: String,
     name: String,
+    /// A video editor's loopback stream URL (stream.rs); `None` for an image.
+    stream: Option<String>,
 }
 
 /// (the path it was opened with, for the clipboard and display; its canonical path, for file I/O).
@@ -24,10 +26,6 @@ fn editor_paths(state: &AppState, window: &WebviewWindow) -> Result<(PathBuf, Pa
         .get(window.label())
         .cloned()
         .ok_or_else(|| "not an editor window".to_string())
-}
-
-pub(crate) fn is_mp4(p: &Path) -> bool {
-    p.extension().is_some_and(|e| e.eq_ignore_ascii_case("mp4"))
 }
 
 /// async: building a window from a sync command deadlocks on Windows (WebView2).
@@ -59,6 +57,7 @@ pub fn editor_info(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default(),
+        stream: crate::stream::url(window.label()),
     })
 }
 
@@ -106,7 +105,7 @@ pub async fn trim_video(
     mute: bool,
 ) -> Result<bool, String> {
     let (opened, canon) = editor_paths(&state, &window)?;
-    if !is_mp4(&canon) {
+    if !thumbnail::is_mp4(&canon) {
         return Err("not a recording".into());
     }
     if !(start >= 0.0 && end > start) {
@@ -176,16 +175,4 @@ pub fn copy_path(state: State<'_, AppState>, path: String) -> Result<(), String>
     state
         .clipboard
         .copy_capture(&given, None, store::ClipboardMode::PathOnly)
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn only_mp4s_are_trimmed() {
-        use std::path::Path;
-        assert!(super::is_mp4(Path::new("/v/Recording_1.mp4")));
-        assert!(super::is_mp4(Path::new("/v/R.MP4")));
-        assert!(!super::is_mp4(Path::new("/v/Screenshot_1.png")));
-        assert!(!super::is_mp4(Path::new("/v/mp4")));
-    }
 }

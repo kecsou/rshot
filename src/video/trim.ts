@@ -1,5 +1,3 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
-
 /** m:ss.t (rounded first, so 59.96 is 1:00.0, not 0:60.0). */
 export function fmt(s: number): string {
   const t = Math.round(s * 10) / 10;
@@ -26,27 +24,6 @@ export function clampTrim(start: number, end: number, dur: number, minLen: numbe
 
 export function timeAt(px: number, width: number, dur: number): number {
   return Math.max(0, Math.min(dur, (px / width) * dur));
-}
-
-/**
- * What the card fetches: the asset protocol's largest single range (1000 KiB). Recordings are
- * faststart MP4s, so it starts with the moov (duration) and then the first frame, the poster.
- * ponytail: the moov grows with length (about 0.5 KB per second); a recording so long that it
- * doesn't fit gets the card's "can't play" text, while its editor still plays it.
- */
-export const POSTER_BYTES = 1000 * 1024;
-
-/**
- * A blob: URL for a recording, fetched over the asset protocol (granted one file at a time).
- * WebKitGTK's player can't stream from it: its GStreamer source takes only http(s) and blob URIs
- * ("No URI handler implemented for asset"). `bytes`: only the first ones.
- * ponytail: the editor holds the whole file in memory while it's open; a range-serving source
- * (localhost HTTP, or fragmented MP4 + MSE) if hour-long recordings get edited.
- */
-export async function videoUrl(path: string, bytes?: number): Promise<string> {
-  const r = await fetch(convertFileSrc(path), bytes ? { headers: { Range: `bytes=0-${bytes - 1}` } } : {});
-  if (!r.ok) throw new Error(`${r.status}`);
-  return URL.createObjectURL(await r.blob());
 }
 
 /**

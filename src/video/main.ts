@@ -6,7 +6,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { ask, fail } from '../shared/ask';
 import { mountIcons } from '../shared/icons';
 import * as ipc from '../shared/ipc';
-import { clampTrim, clock, fmt, playable, timeAt, videoUrl } from './trim';
+import { clampTrim, clock, fmt, playable, timeAt } from './trim';
 
 mountIcons();
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -29,7 +29,9 @@ const info = await ipc.editorInfo().catch(async (e) => {
 });
 $('#title').textContent = info.name;
 $('#path').textContent = info.display;
-let ok = await videoUrl(info.path).then((u) => ((v.src = u), playable(v)), () => false);
+// Streamed from the loopback server (WebKitGTK's player can't read a custom URI scheme).
+if (info.stream) v.src = info.stream;
+let ok = !!info.stream && (await playable(v));
 const dur = ok ? v.duration : 0;
 let [start, end] = [0, dur];
 let mute = false;

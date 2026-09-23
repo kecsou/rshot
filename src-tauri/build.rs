@@ -25,6 +25,7 @@ fn main() {
             "reveal_capture",
             "delete_capture",
             "retry_copy",
+            "video_poster",
             "open_editor",
             "editor_info",
             "save_image",

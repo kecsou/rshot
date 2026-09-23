@@ -121,8 +121,56 @@ pub(crate) fn is_png(p: &Path) -> bool {
     p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"))
 }
 
+pub(crate) fn is_mp4(p: &Path) -> bool {
+    p.extension().is_some_and(|e| e.eq_ignore_ascii_case("mp4"))
+}
+
+#[derive(Serialize)]
+pub struct Poster {
+    png: Vec<u8>,
+    duration: Option<f64>,
+}
+
+/// A recording's first frame (PNG, at most 460 px wide: the card's width ×2 for HiDPI) and its
+/// duration, from the bundled ffmpeg. The card never plays the video, so it needs no GStreamer.
+/// async: ffmpeg runs on a blocking thread.
+#[tauri::command]
+pub async fn video_poster(app: AppHandle, path: String) -> Result<Poster, String> {
+    let (_, canon) = guard(&app.state::<AppState>(), &path)?;
+    if !is_mp4(&canon) {
+        return Err("not a recording".into());
+    }
+    let ffmpeg = crate::recorder::ffmpeg_path().ok_or(crate::recorder::NO_FFMPEG)?;
+    let args = crate::recorder::poster_args(&canon, 460);
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        std::process::Command::new(ffmpeg)
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .output()
+    })
+    .await
+    .map_err(err)?
+    .map_err(err)?;
+    if !out.status.success() || out.stdout.is_empty() {
+        return Err("ffmpeg couldn't read the recording".into());
+    }
+    Ok(Poster {
+        png: out.stdout,
+        duration: crate::recorder::parse_duration(&String::from_utf8_lossy(&out.stderr)),
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_mp4s_are_recordings() {
+        use std::path::Path;
+        assert!(super::is_mp4(Path::new("/v/Recording_1.mp4")));
+        assert!(super::is_mp4(Path::new("/v/R.MP4")));
+        assert!(!super::is_mp4(Path::new("/v/Screenshot_1.png")));
+        assert!(!super::is_mp4(Path::new("/v/mp4")));
+    }
+
     #[test]
     fn only_pngs_go_on_the_clipboard_as_images() {
         use std::path::Path;

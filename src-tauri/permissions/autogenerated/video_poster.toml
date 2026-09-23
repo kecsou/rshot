@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-video-poster"
+description = "Enables the video_poster command without any pre-configured scope."
+commands.allow = ["video_poster"]
+
+[[permission]]
+identifier = "deny-video-poster"
+description = "Denies the video_poster command without any pre-configured scope."
+commands.deny = ["video_poster"]

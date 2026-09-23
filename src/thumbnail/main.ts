@@ -4,12 +4,11 @@ import './thumbnail.css';
 import { startDrag } from '@crabnebula/tauri-plugin-drag';
 import { mountIcons } from '../shared/icons';
 import * as ipc from '../shared/ipc';
-import { POSTER_BYTES, clock, playable, videoUrl } from '../video/trim';
+import { clock } from '../video/trim';
 
 mountIcons();
 const card = document.querySelector<HTMLElement>('#card')!;
 const img = document.querySelector<HTMLImageElement>('#img')!;
-const vid = document.querySelector<HTMLVideoElement>('#vid')!;
 const DISMISS_MS = 5000;
 
 function setCopied(ok: boolean) {
@@ -18,39 +17,33 @@ function setCopied(ok: boolean) {
   document.querySelector<HTMLElement>('#retry')!.hidden = ok;
 }
 
+/** Small PNG for the drag cursor (the full capture would be enormous). */
+function dragIcon(): string {
+  const w = 160;
+  const h = Math.max(1, Math.round((img.naturalHeight / Math.max(1, img.naturalWidth)) * w));
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  c.getContext('2d')!.drawImage(img, 0, 0, w, h);
+  return c.toDataURL('image/png');
+}
+
 async function run() {
   const t = await ipc.thumbnailInfo();
   if (!t) return void ipc.dismissThumbnail();
   if (t.kind === 'video') {
-    img.hidden = true;
-    vid.hidden = false;
+    // A poster frame and the duration from ffmpeg: the card never plays the video.
     document.querySelector<HTMLElement>('.play')!.hidden = false;
-    // Over the asset protocol, never through IPC; as a same-origin blob, the drag icon can read it back.
-    void videoUrl(t.path, POSTER_BYTES)
-      .then((u) => ((vid.src = u), playable(vid)), () => false)
-      .then((ok) => {
-        if (!ok) return void card.classList.add('noplay');
-        vid.currentTime = Math.min(0.1, vid.duration / 2); // the first frame as the poster
-        const d = document.querySelector<HTMLElement>('.dur')!;
-        d.textContent = clock(vid.duration);
-        d.hidden = false;
-      });
+    const p = await ipc.videoPoster(t.path).catch(() => null);
+    if (p) img.src = URL.createObjectURL(new Blob([new Uint8Array(p.png)], { type: 'image/png' }));
+    if (p?.duration != null) {
+      const d = document.querySelector<HTMLElement>('.dur')!;
+      d.textContent = clock(p.duration);
+      d.hidden = false;
+    }
   } else {
     img.src = URL.createObjectURL(new Blob([await ipc.readCapture(t.path)], { type: 'image/png' }));
   }
-
-  /** Small PNG for the drag cursor (the full capture would be enormous). */
-  const dragIcon = (): string => {
-    const [src, nw, nh]: [CanvasImageSource, number, number] =
-      t.kind === 'video' ? [vid, vid.videoWidth, vid.videoHeight] : [img, img.naturalWidth, img.naturalHeight];
-    const w = 160;
-    const h = Math.max(1, Math.round((nh / Math.max(1, nw)) * w));
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    c.getContext('2d')!.drawImage(src, 0, 0, w, h);
-    return c.toDataURL('image/png');
-  };
   document.querySelector('#path')!.textContent = t.display;
   setCopied(t.copied);
 

@@ -230,6 +230,38 @@ pub fn trim_args(src: &Path, start: f64, end: f64, mute: bool, out: &Path) -> Ve
     a
 }
 
+/// The first frame as one PNG on stdout, at most `width` px wide. At the default log level, ffmpeg
+/// also prints the input's `Duration:` line to stderr (`parse_duration`).
+pub fn poster_args(src: &Path, width: u32) -> Vec<String> {
+    let (src, scale) = (
+        src.display().to_string(),
+        format!("scale='min({width},iw)':-1"),
+    );
+    strs(&[
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        &src,
+        "-frames:v",
+        "1",
+        "-vf",
+        &scale,
+        "-f",
+        "image2pipe",
+        "-c:v",
+        "png",
+        "-",
+    ])
+}
+
+/// Seconds from the `  Duration: 00:01:02.50, start: …` line of ffmpeg's stderr; `None` for `N/A`.
+pub fn parse_duration(stderr: &str) -> Option<f64> {
+    let hms = stderr.split("Duration: ").nth(1)?.split(',').next()?;
+    let mut parts = hms.split(':').map(|p| p.trim().parse::<f64>().ok());
+    let (h, m, s) = (parts.next()??, parts.next()??, parts.next()??);
+    Some(h * 3600.0 + m * 60.0 + s)
+}
+
 static GENERATION: AtomicU64 = AtomicU64::new(1);
 
 pub struct Recording {
@@ -766,5 +798,39 @@ mod tests {
         let b = trim_args(Path::new("/v/R.mp4"), 0.0, 1.0, false, Path::new("/o.mp4"));
         assert!(b.windows(2).any(|w| w == s(&["-c:a", "aac"])));
         assert!(!b.contains(&"-an".to_string()));
+    }
+
+    #[test]
+    fn poster_is_one_png_frame_on_stdout() {
+        assert_eq!(
+            poster_args(Path::new("/v/R.mp4"), 460),
+            s(&[
+                "-hide_banner",
+                "-nostats",
+                "-i",
+                "/v/R.mp4",
+                "-frames:v",
+                "1",
+                "-vf",
+                "scale='min(460,iw)':-1",
+                "-f",
+                "image2pipe",
+                "-c:v",
+                "png",
+                "-",
+            ])
+        );
+    }
+
+    #[test]
+    fn duration_parses_from_ffmpeg_stderr() {
+        let err = "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/v/R.mp4':\n  Metadata:\n    encoder         : Lavf61.7.100\n  Duration: 00:01:02.50, start: 0.000000, bitrate: 97 kb/s\n";
+        assert_eq!(parse_duration(err), Some(62.5));
+        assert_eq!(
+            parse_duration("  Duration: 01:00:00.04, start: 0"),
+            Some(3600.04)
+        );
+        assert_eq!(parse_duration("  Duration: N/A, start: 0"), None);
+        assert_eq!(parse_duration("no input"), None);
     }
 }

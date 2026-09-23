@@ -44,6 +44,9 @@ export const revealCapture = (path: string) => invoke<void>('reveal_capture', { 
 export const deleteCapture = (path: string) => invoke<void>('delete_capture', { path });
 export const retryCopy = (path: string) => invoke<void>('retry_copy', { path });
 export const dismissThumbnail = () => invoke<void>('close_window'); // this card only
+/** A recording's first frame (PNG bytes) and duration in seconds (null if unknown). */
+export type VideoPoster = { png: number[]; duration: number | null };
+export const videoPoster = (path: string) => invoke<VideoPoster>('video_poster', { path });
 
 export const countdownInfo = () => invoke<number>('countdown_info');
 export const countdownDone = () => invoke<void>('countdown_done');
@@ -69,7 +72,8 @@ export const onboardingChoice = (accept: boolean) => invoke<void>('onboarding_ch
 export const openConfig = () => invoke<void>('open_config');
 export const closeWindow = () => invoke<void>('close_window');
 
-export type EditorInfo = { path: string; display: string; name: string };
+/** `stream`: a video editor's loopback URL for its file (null for an image). */
+export type EditorInfo = { path: string; display: string; name: string; stream: string | null };
 export const openEditor = (path: string) => invoke<void>('open_editor', { path });
 export const editorInfo = () => invoke<EditorInfo>('editor_info');
 /** Sends the PNG as a raw IPC body (no JSON/base64 round-trip). False = written, but not copied. */

@@ -630,10 +630,9 @@ fn new_editor(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let page = if crate::editor::is_mp4(&canon) {
-        // The page reads it over the asset protocol: this one file (canonical, as the protocol
-        // matches requests), never its folder.
-        app.asset_protocol_scope().allow_file(&canon).map_err(err)?;
+    let page = if crate::thumbnail::is_mp4(&canon) {
+        // Its page plays it from the loopback server, for as long as this window is open.
+        crate::stream::share(&label, canon.clone())?;
         "video/index.html"
     } else {
         "editor/index.html"
@@ -673,6 +672,7 @@ fn forget_editor(app: &AppHandle, label: &str) {
         .lock()
         .unwrap()
         .remove(label);
+    crate::stream::revoke(label);
 }
 
 /// Countdown ring centred on a desktop point (physical pixels).

@@ -10,6 +10,7 @@ mod recorder;
 mod settings;
 mod shortcuts;
 mod store;
+mod stream;
 mod thumbnail;
 mod ui;
 
@@ -133,6 +134,7 @@ fn main() {
             thumbnail::reveal_capture,
             thumbnail::delete_capture,
             thumbnail::retry_copy,
+            thumbnail::video_poster,
             editor::open_editor,
             editor::editor_info,
             editor::save_image,
