@@ -31,10 +31,8 @@ function render() {
       return;
     }
     b.className = 'keys';
-    b.innerHTML = s.shortcuts[b.dataset.shortcut as keyof ipc.Shortcuts]
-      .split('+')
-      .map((k) => `<kbd>${esc(k)}</kbd>`)
-      .join('');
+    const v = s.shortcuts[b.dataset.shortcut as keyof ipc.Shortcuts];
+    b.innerHTML = v ? v.split('+').map((k) => `<kbd>${esc(k)}</kbd>`).join('') : '<kbd>Not set</kbd>';
   });
   const err = document.querySelector<HTMLElement>('#err')!;
   err.hidden = !s.takeover_error;

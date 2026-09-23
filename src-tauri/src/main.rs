@@ -3,6 +3,7 @@
 mod capture;
 mod cli;
 mod clipboard;
+mod combo;
 mod editor;
 mod overlay;
 mod pipeline;

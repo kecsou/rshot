@@ -29,11 +29,18 @@ pub struct Shortcuts {
 
 impl Default for Shortcuts {
     fn default() -> Self {
+        let (area, screen, window, record) = if cfg!(target_os = "windows") {
+            ("Super+Shift+S", "Super+Print", "Alt+Print", "Super+Shift+R")
+        } else if cfg!(target_os = "macos") {
+            ("Super+Shift+4", "Super+Shift+3", "", "")
+        } else {
+            ("Print", "Shift+Print", "Alt+Print", "Ctrl+Alt+Shift+R")
+        };
         Self {
-            area: "Print".into(),
-            screen: "Shift+Print".into(),
-            window: "Alt+Print".into(),
-            record: "Ctrl+Alt+Shift+R".into(),
+            area: area.into(),
+            screen: screen.into(),
+            window: window.into(),
+            record: record.into(),
         }
     }
 }
@@ -426,7 +433,7 @@ mod tests {
         let c = Config::default();
         assert_eq!(c.fps, 30);
         assert_eq!(c.mic, None);
-        assert_eq!(c.shortcuts.record, "Ctrl+Alt+Shift+R");
+        assert_eq!(c.shortcuts.record, Shortcuts::default().record);
         let d = tmp("oldcfg");
         let p = d.join("config.toml");
         fs::write(
@@ -437,8 +444,8 @@ mod tests {
         // A config from before `record` existed keeps its values (it isn't moved aside as invalid).
         let old = load_config_from(&p).shortcuts;
         assert_eq!(
-            (old.area.as_str(), old.record.as_str()),
-            ("F1", "Ctrl+Alt+Shift+R")
+            (old.area.as_str(), old.record),
+            ("F1", Shortcuts::default().record)
         );
         fs::remove_dir_all(&d).unwrap();
         assert!(recordings_dir(&c).ends_with("Screencasts"));
