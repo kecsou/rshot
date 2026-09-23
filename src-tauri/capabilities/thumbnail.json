@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "thumbnail",
+  "description": "Post-capture thumbnail card",
+  "windows": ["thumbnail-*"],
+  "permissions": ["allow-thumbnail-info", "allow-read-capture", "allow-reveal-capture", "allow-delete-capture", "allow-retry-copy", "allow-close-window", "allow-open-editor", "drag:default"]
+}

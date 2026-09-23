@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-overlay-options"
+description = "Enables the set_overlay_options command without any pre-configured scope."
+commands.allow = ["set_overlay_options"]
+
+[[permission]]
+identifier = "deny-set-overlay-options"
+description = "Denies the set_overlay_options command without any pre-configured scope."
+commands.deny = ["set_overlay_options"]

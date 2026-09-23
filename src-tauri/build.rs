@@ -2,5 +2,37 @@ fn main() {
     // No test-only Windows manifest: the unit tests are built from the bin target, so they get
     // tauri-build's Common-Controls v6 manifest through rustc-link-arg-bins like the app does.
     // (rustc-link-arg-tests would fail the build: this package has no tests/ target.)
-    tauri_build::build()
+    // Every app command, so capabilities/*.json can grant each window only the ones it calls.
+    // Keep in sync with generate_handler! in main.rs.
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
+        tauri_build::AppManifest::new().commands(&[
+            "overlay_info",
+            "overlay_frame",
+            "overlay_ready",
+            "overlay_activate",
+            "overlay_cancel",
+            "overlay_capture",
+            "set_overlay_options",
+            "pick_folder",
+            "countdown_info",
+            "countdown_done",
+            "countdown_cancel",
+            "thumbnail_info",
+            "read_capture",
+            "reveal_capture",
+            "delete_capture",
+            "retry_copy",
+            "open_editor",
+            "editor_info",
+            "save_image",
+            "editor_delete",
+            "copy_path",
+            "get_settings",
+            "set_settings",
+            "onboarding_choice",
+            "open_config",
+            "close_window",
+        ]),
+    ))
+    .expect("failed to run tauri-build");
 }

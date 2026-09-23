@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Every rshot window",
+  "description": "Every rshot window: core APIs and window dragging, no app commands. The notification plugin's init script asks is_permission_granted in every page.",
   "windows": ["*"],
-  "permissions": ["core:default", "core:window:allow-start-dragging", "drag:default"]
+  "permissions": ["core:default", "core:window:allow-start-dragging", "notification:allow-is-permission-granted"]
 }

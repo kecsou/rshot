@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "dialogs",
+  "description": "Settings and onboarding dialogs",
+  "windows": ["settings", "onboarding"],
+  "permissions": ["allow-get-settings", "allow-set-settings", "allow-onboarding-choice", "allow-open-config", "allow-close-window", "allow-pick-folder"]
+}

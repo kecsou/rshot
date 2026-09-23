@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-countdown-done"
+description = "Enables the countdown_done command without any pre-configured scope."
+commands.allow = ["countdown_done"]
+
+[[permission]]
+identifier = "deny-countdown-done"
+description = "Denies the countdown_done command without any pre-configured scope."
+commands.deny = ["countdown_done"]

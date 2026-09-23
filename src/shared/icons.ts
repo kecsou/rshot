@@ -1,4 +1,4 @@
-export const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+export const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg" hidden>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
 <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
 <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></symbol>

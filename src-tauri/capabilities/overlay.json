@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay",
+  "description": "Capture overlays (one per monitor)",
+  "windows": ["overlay-*"],
+  "permissions": ["allow-overlay-info", "allow-overlay-frame", "allow-overlay-ready", "allow-overlay-activate", "allow-overlay-cancel", "allow-overlay-capture", "allow-set-overlay-options", "allow-pick-folder"]
+}

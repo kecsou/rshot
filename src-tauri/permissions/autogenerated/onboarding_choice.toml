@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-onboarding-choice"
+description = "Enables the onboarding_choice command without any pre-configured scope."
+commands.allow = ["onboarding_choice"]
+
+[[permission]]
+identifier = "deny-onboarding-choice"
+description = "Denies the onboarding_choice command without any pre-configured scope."
+commands.deny = ["onboarding_choice"]
