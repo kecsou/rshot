@@ -630,12 +630,20 @@ fn new_editor(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
+    let page = if crate::editor::is_mp4(&canon) {
+        // The page reads it over the asset protocol: this one file (canonical, as the protocol
+        // matches requests), never its folder.
+        app.asset_protocol_scope().allow_file(&canon).map_err(err)?;
+        "video/index.html"
+    } else {
+        "editor/index.html"
+    };
     app.state::<crate::AppState>()
         .editors
         .lock()
         .unwrap()
         .insert(label.clone(), (path, canon));
-    let win = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("editor/index.html".into()))
+    let win = WebviewWindowBuilder::new(app, &label, WebviewUrl::App(page.into()))
         .title(format!("{name} — rshot"))
         .decorations(false)
         .transparent(true)

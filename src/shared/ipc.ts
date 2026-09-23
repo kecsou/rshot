@@ -85,3 +85,5 @@ export type RecordingInfo = { elapsed_ms: number; mic: boolean; level: number | 
 export const recordingInfo = () => invoke<RecordingInfo | null>('recording_info');
 export const recordingStop = () => invoke<void>('recording_stop');
 export const recordingDiscard = () => invoke<void>('recording_discard');
+/** Keeps [start, end] s of the open recording, saved in place. False = trimmed, but not copied. */
+export const trimVideo = (start: number, end: number, mute: boolean) => invoke<boolean>('trim_video', { start, end, mute });

@@ -1,8 +1,8 @@
-//! Commands behind the image editor window. The window label maps to the file it edits.
+//! Commands behind the image and video editor windows. The window label maps to the file it edits.
 
 use crate::{err, pipeline, store, thumbnail, ui, AppState};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{
     ipc::{InvokeBody, Request},
     AppHandle, Manager, State, WebviewWindow,
@@ -24,6 +24,10 @@ fn editor_paths(state: &AppState, window: &WebviewWindow) -> Result<(PathBuf, Pa
         .get(window.label())
         .cloned()
         .ok_or_else(|| "not an editor window".to_string())
+}
+
+pub(crate) fn is_mp4(p: &Path) -> bool {
+    p.extension().is_some_and(|e| e.eq_ignore_ascii_case("mp4"))
 }
 
 /// async: building a window from a sync command deadlocks on Windows (WebView2).
@@ -75,12 +79,68 @@ pub async fn save_image(
         return Err("not a PNG".into());
     }
     let (opened, canon) = editor_paths(&state, &window)?;
+    // Image and video editors share a capability: each writes only its own kind of file.
+    if !thumbnail::is_png(&canon) {
+        return Err("not an image".into());
+    }
     store::write_atomic(&canon, png).map_err(err)?;
     let mode = state.config.lock().unwrap().clipboard_mode;
     Ok(state
         .clipboard
         .copy_capture(&opened, Some(png), mode)
         .inspect_err(|e| eprintln!("rshot: saved, but not copied: {e}"))
+        .is_ok())
+}
+
+/// Keeps [start, end] (seconds) of the open recording, muted or not: re-encodes it to a hidden
+/// temp file next to it, then renames that over the original (spec §2.7), so the path the user
+/// already pasted stays valid. Then re-copies it (path + file, never an image). Ok(false) = trimmed
+/// but not copied, as for `save_image`: the page must not trim again, only offer a copy retry.
+/// async: the re-encode takes seconds, on a blocking thread.
+#[tauri::command]
+pub async fn trim_video(
+    window: WebviewWindow,
+    state: State<'_, AppState>,
+    start: f64,
+    end: f64,
+    mute: bool,
+) -> Result<bool, String> {
+    let (opened, canon) = editor_paths(&state, &window)?;
+    if !is_mp4(&canon) {
+        return Err("not a recording".into());
+    }
+    if !(start >= 0.0 && end > start) {
+        return Err("invalid trim range".into());
+    }
+    let ffmpeg = crate::recorder::ffmpeg_path().ok_or(crate::recorder::NO_FFMPEG)?;
+    let stem = canon
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let tmp = canon.with_file_name(format!(".{stem}.trim.mp4"));
+    let args = crate::recorder::trim_args(&canon, start, end, mute, &tmp);
+    let trimmed = tauri::async_runtime::spawn_blocking(move || {
+        std::process::Command::new(ffmpeg)
+            .args(args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(crate::recorder::ffmpeg_log(true))
+            .status()
+    })
+    .await
+    .map_err(err)?
+    .map_err(err)
+    .and_then(|s| s.success().then_some(()).ok_or_else(|| s.to_string()))
+    .and_then(|()| std::fs::rename(&tmp, &canon).map_err(err));
+    if let Err(e) = trimmed {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("Couldn't trim the video: {e}"));
+    }
+    let mode = state.config.lock().unwrap().clipboard_mode;
+    Ok(state
+        .clipboard
+        .copy_capture(&opened, None, mode)
+        .inspect_err(|e| eprintln!("rshot: trimmed, but not copied: {e}"))
         .is_ok())
 }
 
@@ -116,4 +176,16 @@ pub fn copy_path(state: State<'_, AppState>, path: String) -> Result<(), String>
     state
         .clipboard
         .copy_capture(&given, None, store::ClipboardMode::PathOnly)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn only_mp4s_are_trimmed() {
+        use std::path::Path;
+        assert!(super::is_mp4(Path::new("/v/Recording_1.mp4")));
+        assert!(super::is_mp4(Path::new("/v/R.MP4")));
+        assert!(!super::is_mp4(Path::new("/v/Screenshot_1.png")));
+        assert!(!super::is_mp4(Path::new("/v/mp4")));
+    }
 }

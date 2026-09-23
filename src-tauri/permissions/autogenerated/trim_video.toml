@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-trim-video"
+description = "Enables the trim_video command without any pre-configured scope."
+commands.allow = ["trim_video"]
+
+[[permission]]
+identifier = "deny-trim-video"
+description = "Denies the trim_video command without any pre-configured scope."
+commands.deny = ["trim_video"]

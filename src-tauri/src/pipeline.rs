@@ -41,6 +41,15 @@ pub fn finish_video(app: &AppHandle, path: &Path) -> Result<(), String> {
     let state = app.state::<AppState>();
     let cfg = state.config.lock().unwrap().clone();
     let copied = state.clipboard.copy_capture(path, None, cfg.clipboard_mode);
+    // The card reads it over the asset protocol, which is granted one file at a time (never a
+    // folder), by canonical path: the protocol canonicalizes each request before matching.
+    if let Err(e) = path
+        .canonicalize()
+        .map_err(err)
+        .and_then(|c| app.asset_protocol_scope().allow_file(c).map_err(err))
+    {
+        eprintln!("rshot: asset scope: {e}");
+    }
     finish(app, &cfg, path, "video", copied);
     Ok(())
 }

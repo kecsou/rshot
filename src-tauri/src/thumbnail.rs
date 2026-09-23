@@ -117,7 +117,7 @@ pub fn retry_copy(state: State<'_, AppState>, path: String) -> Result<(), String
     Ok(())
 }
 
-fn is_png(p: &Path) -> bool {
+pub(crate) fn is_png(p: &Path) -> bool {
     p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"))
 }
 

@@ -29,6 +29,7 @@ fn main() {
             "editor_info",
             "save_image",
             "editor_delete",
+            "trim_video",
             "copy_path",
             "get_settings",
             "set_settings",

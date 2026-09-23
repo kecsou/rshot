@@ -137,6 +137,7 @@ fn main() {
             editor::editor_info,
             editor::save_image,
             editor::editor_delete,
+            editor::trim_video,
             editor::copy_path,
             settings::get_settings,
             settings::set_settings,

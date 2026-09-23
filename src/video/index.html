@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>rshot video</title>
+  </head>
+  <body>
+    <div class="ed">
+      <header data-tauri-drag-region>
+        <span class="title" id="title"></span><span class="meta" id="meta"></span><span class="sp" data-tauri-drag-region></span>
+        <button class="ib" id="delete" data-icon="i-trash" title="Delete recording" aria-label="Delete recording"></button>
+        <button class="b2" id="copy" data-icon="i-copy" title="Copy path + file">Copy</button>
+        <button class="b1" id="done" title="Save and close (Enter)">Done</button>
+        <button class="wx" id="close" data-icon="i-x" aria-label="Close"></button>
+      </header>
+      <div class="stage">
+        <video id="v" preload="auto"></video><button class="bigplay" id="bigplay" aria-label="Play"><i></i></button>
+        <p class="nomsg">Can't play this video here</p>
+      </div>
+      <div class="tl">
+        <div class="tlrow">
+          <button class="pbtn" id="play" aria-label="Play or pause (Space)"><i></i></button>
+          <div class="strip" id="strip">
+            <canvas id="frames"></canvas>
+            <div class="out" id="out-l"></div><div class="out" id="out-r"></div>
+            <div class="trim" id="trim"><span class="grip l" data-grip="start"></span><span class="grip r" data-grip="end"></span></div>
+            <div class="head" id="head"></div>
+          </div>
+        </div>
+        <div class="tlmeta">
+          <span id="readout"></span>
+          <span class="right">
+            <label class="tog">Mute audio<button class="switch" role="switch" id="mute" aria-checked="false"></button></label>
+            <span class="chip"><span class="ok"><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg></span><span class="p" id="path"></span>
+              <button class="cp" id="reveal" data-icon="i-folder" title="Show in folder" aria-label="Show in folder"></button></span>
+          </span>
+        </div>
+      </div>
+      <!-- Covers the whole window, header included: nothing else is clickable while a prompt is up. -->
+      <div id="modal" hidden><div class="glass box" role="alertdialog" aria-modal="true" aria-labelledby="modal-text"><p id="modal-text"></p><div class="acts" id="modal-acts"></div></div></div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -202,6 +202,34 @@ pub fn remux_args(mkv: &Path, mp4: &Path) -> Vec<String> {
     ])
 }
 
+/// Frame-accurate: `-ss` before `-i` with a re-encode seeks exactly. Muted drops the audio.
+pub fn trim_args(src: &Path, start: f64, end: f64, mute: bool, out: &Path) -> Vec<String> {
+    let (src, out) = (src.display().to_string(), out.display().to_string());
+    let (ss, t) = (format!("{start:.3}"), format!("{:.3}", end - start));
+    let mut a = strs(&[
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        &ss,
+        "-i",
+        &src,
+        "-t",
+        &t,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+    ]);
+    a.extend(strs(if mute { &["-an"] } else { &["-c:a", "aac"] }));
+    a.extend(strs(&["-movflags", "+faststart", "-y", &out]));
+    a
+}
+
 static GENERATION: AtomicU64 = AtomicU64::new(1);
 
 pub struct Recording {
@@ -227,8 +255,8 @@ fn ffmpeg_log_path() -> PathBuf {
 }
 
 /// ffmpeg's own log, so a failed recording can be diagnosed: fresh per recording, and the remux
-/// appends to it.
-fn ffmpeg_log(append: bool) -> Stdio {
+/// and trims append to it.
+pub(crate) fn ffmpeg_log(append: bool) -> Stdio {
     let path = ffmpeg_log_path();
     let _ = std::fs::create_dir_all(path.parent().expect("has a parent"));
     std::fs::OpenOptions::new()
@@ -697,5 +725,46 @@ mod tests {
                 "/v/R.mp4"
             ])
         );
+    }
+
+    #[test]
+    fn trim_reencodes_the_kept_range() {
+        let a = trim_args(
+            Path::new("/v/R.mp4"),
+            4.8,
+            28.6,
+            true,
+            Path::new("/v/.R.trim.mp4"),
+        );
+        assert_eq!(
+            a,
+            s(&[
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-ss",
+                "4.800",
+                "-i",
+                "/v/R.mp4",
+                "-t",
+                "23.800",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "20",
+                "-pix_fmt",
+                "yuv420p",
+                "-an",
+                "-movflags",
+                "+faststart",
+                "-y",
+                "/v/.R.trim.mp4",
+            ])
+        );
+        let b = trim_args(Path::new("/v/R.mp4"), 0.0, 1.0, false, Path::new("/o.mp4"));
+        assert!(b.windows(2).any(|w| w == s(&["-c:a", "aac"])));
+        assert!(!b.contains(&"-an".to_string()));
     }
 }
