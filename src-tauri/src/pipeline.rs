@@ -16,9 +16,7 @@ pub fn finish_capture(app: &AppHandle, img: RgbaImage) -> Result<PathBuf, String
     let state = app.state::<AppState>();
     let cfg = state.config.lock().unwrap().clone();
     let png = capture::encode_png(&img)?;
-    let saved =
-        store::new_screenshot_path(&cfg).and_then(|p| store::write_atomic(&p, &png).map(|()| p));
-    let path = match saved {
+    let path = match store::save_screenshot(&cfg, &png) {
         Ok(p) => p,
         Err(e) => {
             // Never lose the capture: fall back to the image alone.
