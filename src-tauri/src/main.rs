@@ -77,14 +77,16 @@ fn main() {
     if cmd != cli::Cmd::Daemon && forward_to_daemon() {
         return;
     }
-    if cmd == cli::Cmd::RestoreShortcuts {
-        std::process::exit(match shortcuts::restore_from_cli() {
-            Ok(()) => 0,
-            Err(e) => {
-                eprintln!("rshot: {e}");
-                1
-            }
-        });
+    if matches!(cmd, cli::Cmd::RestoreShortcuts | cli::Cmd::ReleaseShortcuts) {
+        std::process::exit(
+            match shortcuts::restore_from_cli(cmd == cli::Cmd::ReleaseShortcuts) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprintln!("rshot: {e}");
+                    1
+                }
+            },
+        );
     }
     // Frame-sized buffers (8-16 MB) must go back to the OS when freed. glibc's dynamic mmap
     // threshold otherwise rises to the first freed frame's size and parks later frames in
@@ -148,6 +150,7 @@ fn main() {
             settings::onboarding_choice,
             settings::open_config,
             settings::close_window,
+            settings::set_rebinding,
             recorder::recording_info,
             recorder::recording_stop,
             recorder::recording_discard,
@@ -156,6 +159,13 @@ fn main() {
         .setup(move |app| {
             ui::create_tray(app.handle())?;
             ui::ensure_overlays(app.handle())?;
+            let started = shortcuts::start(
+                app.handle(),
+                &mut app.state::<AppState>().config.lock().unwrap(),
+            );
+            if let Err(e) = started {
+                pipeline::notify(app.handle(), &e);
+            }
             if !app.state::<AppState>().config.lock().unwrap().onboarded {
                 ui::open_onboarding(app.handle())?;
             }
@@ -219,6 +229,7 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
         RestoreShortcuts => {
             shortcuts::restore_and_save(&mut app.state::<AppState>().config.lock().unwrap())
         }
+        ReleaseShortcuts => shortcuts::release(&app.state::<AppState>().config.lock().unwrap()),
         CaptureArea => overlay::start(app, "area"),
         CaptureScreen => pipeline::capture_screen_now(app),
         CaptureWindow => pipeline::capture_window_now(app),

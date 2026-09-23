@@ -154,6 +154,12 @@ pub fn open_config(app: AppHandle, state: State<'_, AppState>) -> Result<(), Str
         .map_err(err)
 }
 
+/// While Settings records a new shortcut, rshot's own keys must reach it.
+#[tauri::command]
+pub fn set_rebinding(on: bool) {
+    shortcuts::pause(on);
+}
+
 #[tauri::command]
 pub fn close_window(window: WebviewWindow) {
     let _ = window.destroy();

@@ -37,6 +37,7 @@ fn main() {
             "onboarding_choice",
             "open_config",
             "close_window",
+            "set_rebinding",
             "recording_info",
             "recording_stop",
             "recording_discard",

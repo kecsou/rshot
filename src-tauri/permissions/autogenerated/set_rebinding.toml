@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-rebinding"
+description = "Enables the set_rebinding command without any pre-configured scope."
+commands.allow = ["set_rebinding"]
+
+[[permission]]
+identifier = "deny-set-rebinding"
+description = "Denies the set_rebinding command without any pre-configured scope."
+commands.deny = ["set_rebinding"]

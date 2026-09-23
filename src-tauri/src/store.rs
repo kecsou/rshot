@@ -70,7 +70,7 @@ pub struct Config {
     pub onboarded: bool,
     pub takeover: bool,
     pub shortcuts: Shortcuts,
-    /// Original GNOME keybinding values (GVariant text), kept while rshot owns them.
+    /// Original OS shortcut settings (GNOME keybindings / Windows registry), kept while rshot owns them.
     pub gnome_backup: Option<BTreeMap<String, String>>,
     pub recordings_dir: Option<PathBuf>,
     /// PulseAudio/PipeWire source id; `None` records no sound.
@@ -426,6 +426,20 @@ mod tests {
         assert_eq!(set("~/Shots"), Some(home.join("Shots")));
         assert_eq!(set("Shots"), None);
         assert_eq!(set(&abs.display().to_string()), Some(abs));
+    }
+
+    #[test]
+    fn default_shortcuts_parse() {
+        let s = Shortcuts::default();
+        let all = [&s.area, &s.screen, &s.window, &s.record];
+        for k in all.iter().filter(|k| !k.is_empty()) {
+            assert!(crate::combo::parse(k).is_some(), "{k}");
+        }
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            all,
+            ["Print", "Shift+Print", "Alt+Print", "Ctrl+Alt+Shift+R"]
+        );
     }
 
     #[test]

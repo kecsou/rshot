@@ -4,6 +4,8 @@
 mod gnome;
 #[cfg(target_os = "linux")]
 pub mod gvariant;
+#[cfg(any(target_os = "windows", test))]
+mod windows;
 
 use crate::store::{self, Config};
 
@@ -39,13 +41,63 @@ pub fn outdated(_cfg: &Config) -> bool {
     false
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
+pub fn take_over(cfg: &mut Config) -> Result<(), String> {
+    windows::take_over(cfg)
+}
+
+#[cfg(target_os = "windows")]
+pub fn restore(cfg: &mut Config) -> Result<(), String> {
+    windows::restore(cfg)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub fn take_over(_cfg: &mut Config) -> Result<(), String> {
     Err("Taking over the system shortcuts on this OS arrives in a later version.".into())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub fn restore(_cfg: &mut Config) -> Result<(), String> {
+    Ok(())
+}
+
+/// Gives the OS its screenshot keys back but keeps the consent and the backup, so the next launch
+/// takes them again: Quit, installer upgrades. Linux has nothing to give back meanwhile: GNOME's
+/// bindings start rshot.
+#[cfg(target_os = "windows")]
+pub fn release(cfg: &Config) -> Result<(), String> {
+    windows::release(cfg)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn release(_cfg: &Config) -> Result<(), String> {
+    Ok(())
+}
+
+/// Settings is recording a new shortcut: rshot's own keys must reach it (Windows' hook lets them
+/// through meanwhile).
+pub fn pause(on: bool) {
+    #[cfg(target_os = "windows")]
+    windows::pause(on);
+    let _ = on;
+}
+
+/// Called once at startup. Windows keeps its bindings in-process, so a saved takeover is taken
+/// again. If that fails, it ends as a failed Settings takeover does: the OS gets its keys back and
+/// the toggle shows off (never on with nothing behind it); the caller shows the error. Linux:
+/// GNOME keeps the bindings, nothing to do.
+pub fn start(app: &tauri::AppHandle, cfg: &mut Config) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        windows::install_hook(app.clone());
+        if cfg.takeover {
+            return take_over(cfg).map_err(|e| match restore_and_save(cfg) {
+                Ok(()) => e,
+                Err(r) => format!("{e}; giving the shortcuts back also failed: {r}"),
+            });
+        }
+    }
+    let _ = (app, cfg);
     Ok(())
 }
 
@@ -56,15 +108,21 @@ pub fn restore_and_save(c: &mut Config) -> Result<(), String> {
     store::save_config(c).map_err(|e| e.to_string())
 }
 
-/// `rshot restore-shortcuts` when no daemon answered (a running daemon does it itself, so its
-/// in-memory config doesn't write the old takeover back later). Used by uninstallers.
-pub fn restore_from_cli() -> Result<(), String> {
+/// `rshot restore-shortcuts [--keep-consent]` when no daemon answered (a running daemon does it
+/// itself, so its in-memory config doesn't write the old takeover back later). Used by
+/// uninstallers; `--keep-consent` (`release`) by installer upgrades.
+pub fn restore_from_cli(keep_consent: bool) -> Result<(), String> {
     // No config = rshot never ran for this user (prerm runs this for everyone logged in,
     // gdm included): nothing to restore, and no config.toml to create.
     if !store::config_path().exists() {
         return Ok(());
     }
-    restore_and_save(&mut store::load_config())
+    let mut c = store::load_config();
+    if keep_consent {
+        release(&c)
+    } else {
+        restore_and_save(&mut c)
+    }
 }
 
 /// Once a package upgrade has replaced the running binary, Linux reports it as

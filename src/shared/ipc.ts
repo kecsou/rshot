@@ -77,6 +77,8 @@ export const setSettings = (settings: Settings) => invoke<Settings>('set_setting
 export const onboardingChoice = (accept: boolean) => invoke<void>('onboarding_choice', { accept });
 export const openConfig = () => invoke<void>('open_config');
 export const closeWindow = () => invoke<void>('close_window');
+/** While Settings records a shortcut, rshot's own keys reach it (Windows' keyboard hook lets them through). */
+export const setRebinding = (on: boolean) => invoke<void>('set_rebinding', { on });
 
 /** `stream`: a video editor's loopback URL for its file (null for an image). */
 export type EditorInfo = { path: string; display: string; name: string; stream: string | null };

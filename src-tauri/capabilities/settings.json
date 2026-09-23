@@ -3,5 +3,5 @@
   "identifier": "settings",
   "description": "Settings window",
   "windows": ["settings"],
-  "permissions": ["allow-get-settings", "allow-set-settings", "allow-open-config", "allow-pick-folder", "allow-close-window", "allow-list-mics", "core:app:allow-version"]
+  "permissions": ["allow-get-settings", "allow-set-settings", "allow-open-config", "allow-pick-folder", "allow-close-window", "allow-set-rebinding", "allow-list-mics", "core:app:allow-version"]
 }

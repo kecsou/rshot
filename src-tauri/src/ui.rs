@@ -298,6 +298,16 @@ fn quit(app: &AppHandle) {
         .filter_map(|l| app.get_webview_window(l))
         .collect();
     if editors.is_empty() {
+        // PrtScn works without rshot until it runs again and takes it back. Linux: GNOME's
+        // bindings start rshot, so they stay.
+        #[cfg(not(target_os = "linux"))]
+        {
+            let released =
+                crate::shortcuts::release(&app.state::<crate::AppState>().config.lock().unwrap());
+            if let Err(e) = released {
+                crate::pipeline::notify(app, &e);
+            }
+        }
         return app.exit(0);
     }
     for w in editors {

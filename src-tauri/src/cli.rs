@@ -1,4 +1,5 @@
-//! Command line: `rshot`, `rshot capture area|screen|window`, `rshot record`, `rshot restore-shortcuts`.
+//! Command line: `rshot`, `rshot capture area|screen|window`, `rshot record`,
+//! `rshot restore-shortcuts [--keep-consent]`.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cmd {
@@ -9,9 +10,13 @@ pub enum Cmd {
     /// Starts a recording, or stops the one running.
     Record,
     RestoreShortcuts,
+    /// `restore-shortcuts --keep-consent`: the OS gets its keys back, and the next launch takes
+    /// them again (installer upgrades).
+    ReleaseShortcuts,
 }
 
-pub const USAGE: &str = "usage: rshot [capture area|screen|window] [record] [restore-shortcuts]";
+pub const USAGE: &str =
+    "usage: rshot [capture area|screen|window] [record] [restore-shortcuts [--keep-consent]]";
 
 /// Parses the arguments that follow the program name.
 pub fn parse(args: &[String]) -> Result<Cmd, String> {
@@ -23,6 +28,7 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
         ["capture", "window"] => Ok(Cmd::CaptureWindow),
         ["record"] => Ok(Cmd::Record),
         ["restore-shortcuts"] => Ok(Cmd::RestoreShortcuts),
+        ["restore-shortcuts", "--keep-consent"] => Ok(Cmd::ReleaseShortcuts),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -42,6 +48,10 @@ mod tests {
         assert_eq!(p(&["capture", "screen"]), Ok(Cmd::CaptureScreen));
         assert_eq!(p(&["capture", "window"]), Ok(Cmd::CaptureWindow));
         assert_eq!(p(&["restore-shortcuts"]), Ok(Cmd::RestoreShortcuts));
+        assert_eq!(
+            p(&["restore-shortcuts", "--keep-consent"]),
+            Ok(Cmd::ReleaseShortcuts)
+        );
         assert_eq!(p(&["record"]), Ok(Cmd::Record));
     }
 
@@ -50,5 +60,6 @@ mod tests {
         assert_eq!(p(&["capture"]), Err(USAGE.to_string()));
         assert_eq!(p(&["capture", "moon"]), Err(USAGE.to_string()));
         assert_eq!(p(&["--help"]), Err(USAGE.to_string()));
+        assert_eq!(p(&["restore-shortcuts", "--keep"]), Err(USAGE.to_string()));
     }
 }

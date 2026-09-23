@@ -56,7 +56,7 @@ fn parse_key(k: &str) -> Option<Key> {
 }
 
 /// Windows virtual-key code.
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", test))]
 pub fn vk(k: Key) -> u32 {
     match k {
         Key::Print => 0x2C,
@@ -108,7 +108,6 @@ mod tests {
         assert_eq!(parse("Ctrl+Space"), None);
     }
 
-    #[cfg(target_os = "windows")]
     #[test]
     fn maps_keys_to_windows_virtual_keys() {
         assert_eq!(

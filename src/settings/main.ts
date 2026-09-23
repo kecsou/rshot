@@ -11,6 +11,13 @@ let s = await ipc.getSettings();
 let rebinding: HTMLElement | null = null;
 const micSel = document.querySelector<HTMLSelectElement>('#mic')!;
 
+/** Starts recording a shortcut into `b`, or stops (null). Tells rshot only when that changes. */
+function setRebinding(b: HTMLElement | null) {
+  const changed = !rebinding !== !b;
+  rebinding = b;
+  return changed ? ipc.setRebinding(!!b) : Promise.resolve();
+}
+
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
 function render() {
@@ -51,6 +58,13 @@ async function update(change: (fresh: ipc.Settings) => void) {
   render();
 }
 
+// A rebind never outlives the window's focus: rshot's keys would stay unguarded.
+addEventListener('blur', () => {
+  if (!rebinding) return;
+  void setRebinding(null);
+  render();
+});
+
 addEventListener('focus', async () => {
   if (rebinding) return;
   const error = s.takeover_error; // keep the manual-binding help while the user goes to set it up
@@ -78,10 +92,13 @@ document.addEventListener('click', async (e) => {
     const d = await ipc.pickFolder();
     if (d) await update((f) => (f.recordings_dir = d));
   } else if (b.dataset.shortcut) {
-    rebinding = b;
+    void setRebinding(b);
     render();
   } else if (b.id === 'config') await ipc.openConfig();
-  else if (b.id === 'close') await ipc.closeWindow();
+  else if (b.id === 'close') {
+    await setRebinding(null);
+    await ipc.closeWindow();
+  }
 });
 
 micSel.addEventListener('change', async () => {
@@ -102,13 +119,13 @@ addEventListener('keydown', async (e) => {
   if (!rebinding) return;
   e.preventDefault();
   if (e.key === 'Escape') {
-    rebinding = null;
+    void setRebinding(null);
     return render();
   }
   const combo = comboFrom(e);
   if (!combo) return;
   const which = rebinding.dataset.shortcut as keyof ipc.Shortcuts;
-  rebinding = null;
+  await setRebinding(null);
   await update((f) => (f.shortcuts[which] = combo));
 });
 
