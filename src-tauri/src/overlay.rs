@@ -45,7 +45,8 @@ pub struct OverlayOptions {
     pub remember_selection: bool,
     pub show_pointer: bool,
     pub screenshots_dir: String,
-    /// The recording microphone (a PulseAudio/PipeWire source id); `None` records no sound.
+    /// The recording microphone (`Mic::id`: a PulseAudio/PipeWire source, a DirectShow device name,
+    /// an AVFoundation audio device index); `None` records no sound.
     pub mic: Option<String>,
 }
 
@@ -383,6 +384,9 @@ fn record_from(
                 y: frame.y + y as i32,
                 w,
                 h,
+                screen: index,
+                lx: x,
+                ly: y,
             }
         }
         None => Region {
@@ -390,6 +394,9 @@ fn record_from(
             y: frame.y,
             w: fw,
             h: fh,
+            screen: index,
+            lx: 0,
+            ly: 0,
         },
     };
     *app.state::<AppState>().pending_rec.lock().unwrap() = Some((region, rect.is_none()));

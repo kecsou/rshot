@@ -15,19 +15,40 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State};
 
-/// A region in physical desktop pixels.
+/// A recorded area. `x`/`y`/`w`/`h` are physical desktop pixels (macOS: the monitor's origin in
+/// points × its scale, plus image pixels). `screen` is its monitor's index in `Monitor::all()`
+/// order, and `lx`/`ly` its top-left in that monitor's image pixels. avfoundation crops with
+/// `lx`/`ly`/`w`/`h` as they are: its "Capture screen N" frames have the display's backing pixel
+/// size, which is the size of xcap's image of that monitor (both enumerate `CGGetActiveDisplayList`).
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Region {
     pub x: i32,
     pub y: i32,
     pub w: u32,
     pub h: u32,
+    pub screen: usize,
+    pub lx: u32,
+    pub ly: u32,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct Mic {
     pub id: String,
     pub label: String,
+}
+
+/// Every ffmpeg rshot runs starts here. Windows: without a console window (a release rshot has
+/// none, so each ffmpeg would open one, and a recording's would be filmed); piped stdin still works.
+pub fn ffmpeg_command(ffmpeg: &Path) -> Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = Command::new(ffmpeg);
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        cmd
+    }
+    #[cfg(not(windows))]
+    Command::new(ffmpeg)
 }
 
 /// The sidecar next to our executable (installed or dev), else `ffmpeg` on PATH.
@@ -72,14 +93,10 @@ pub const NO_FFMPEG: &str =
 pub const NO_FFMPEG: &str =
     "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or put ffmpeg.exe on your PATH.";
 
-const LATER: &str = "Recording on this OS arrives in a later version.";
-
-/// Why a new recording can't start now (not on this OS yet, no ffmpeg, one is running or still
-/// being saved); `None` when it can.
+/// Why a new recording can't start now (no ffmpeg, one is running or still being saved); `None`
+/// when it can.
 pub fn unavailable(app: &AppHandle) -> Option<&'static str> {
-    if cfg!(not(target_os = "linux")) {
-        Some(LATER)
-    } else if ffmpeg_path().is_none() {
+    if ffmpeg_path().is_none() {
         Some(NO_FFMPEG)
     } else if is_recording(app) {
         Some("A recording is already running: stop it first.")
@@ -91,12 +108,15 @@ pub fn unavailable(app: &AppHandle) -> Option<&'static str> {
 }
 
 /// yuv420p needs even dimensions.
-#[cfg(target_os = "linux")]
 pub fn even(v: u32) -> u32 {
     v & !1
 }
 
+// The grabbers' argument builders and device-list parsers are compiled on every OS, so all of
+// them are tested on Linux; each OS uses its own.
+
 /// Parses `ffmpeg -sources pulse`, keeping inputs (monitor sources are dropped).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub fn parse_pulse_sources(out: &str) -> Vec<Mic> {
     out.lines()
         .filter_map(|line| {
@@ -134,34 +154,13 @@ fn strs(v: &[&str]) -> Vec<String> {
     v.iter().map(|s| s.to_string()).collect()
 }
 
-#[cfg(target_os = "linux")]
-pub fn record_args(
-    r: Region,
-    display: &str,
-    fps: u8,
-    mic: Option<&str>,
-    out: &Path,
-) -> Result<Vec<String>, String> {
+/// What every grabber encodes with: H.264; with a mic, AAC and the level meter's filter; then the
+/// crash-safe cluster flags and the output.
+fn encode_tail(mic: bool, out: &Path) -> Vec<String> {
     let mut a = strs(&[
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-f",
-        "x11grab",
-        "-framerate",
-    ]);
-    a.push(fps.to_string());
-    a.extend(strs(&["-draw_mouse", "1", "-video_size"]));
-    a.push(format!("{}x{}", even(r.w), even(r.h)));
-    a.push("-i".into());
-    a.push(format!("{display}+{},{}", r.x, r.y));
-    if let Some(m) = mic {
-        a.extend(strs(&["-f", "pulse", "-i", m]));
-    }
-    a.extend(strs(&[
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
-    ]));
-    if mic.is_some() {
+    ]);
+    if mic {
         a.extend(strs(&["-c:a", "aac", "-b:a", "160k", "-af"]));
         // The mic level, 10 times a second, as `LEVEL_KEY=<dB>` lines on stdout (`direct`: unbuffered,
         // else they only arrive in 32 KiB bursts, about 40 s apart).
@@ -178,18 +177,186 @@ pub fn record_args(
     ]));
     a.push("-y".into());
     a.push(out.display().to_string());
-    Ok(a)
+    a
 }
 
-#[cfg(not(target_os = "linux"))]
+/// Linux: X11 `display`, and a PulseAudio/PipeWire source.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn x11grab_args(r: Region, display: &str, fps: u8, mic: Option<&str>, out: &Path) -> Vec<String> {
+    let mut a = strs(&[
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "x11grab",
+        "-framerate",
+    ]);
+    a.push(fps.to_string());
+    a.extend(strs(&["-draw_mouse", "1", "-video_size"]));
+    a.push(format!("{}x{}", even(r.w), even(r.h)));
+    a.push("-i".into());
+    a.push(format!("{display}+{},{}", r.x, r.y));
+    if let Some(m) = mic {
+        a.extend(strs(&["-f", "pulse", "-i", m]));
+    }
+    a.extend(encode_tail(mic.is_some(), out));
+    a
+}
+
+/// Windows: the desktop at `r` (physical px, negative left of the primary monitor), and a
+/// DirectShow audio device by name.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn gdigrab_args(r: Region, fps: u8, mic: Option<&str>, out: &Path) -> Vec<String> {
+    let mut a = strs(&[
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "gdigrab",
+        "-framerate",
+    ]);
+    a.push(fps.to_string());
+    a.extend(strs(&["-draw_mouse", "1", "-offset_x"]));
+    a.push(r.x.to_string());
+    a.push("-offset_y".into());
+    a.push(r.y.to_string());
+    a.push("-video_size".into());
+    a.push(format!("{}x{}", even(r.w), even(r.h)));
+    a.extend(strs(&["-i", "desktop"]));
+    if let Some(m) = mic {
+        a.extend(strs(&["-f", "dshow", "-i"]));
+        a.push(format!("audio={m}"));
+    }
+    a.extend(encode_tail(mic.is_some(), out));
+    a
+}
+
+/// macOS: avfoundation video device `screen_dev` (a "Capture screen N"), with audio device
+/// `audio_dev` (its index), cropped to `(x, y, w, h)` in that screen's pixels (`Region`).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn avfoundation_args(
+    screen_dev: usize,
+    audio_dev: Option<&str>,
+    crop: Option<(u32, u32, u32, u32)>,
+    fps: u8,
+    out: &Path,
+) -> Vec<String> {
+    let mut a = strs(&[
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "avfoundation",
+        "-capture_cursor",
+        "1",
+        "-framerate",
+    ]);
+    a.push(fps.to_string());
+    a.push("-i".into());
+    a.push(format!("{screen_dev}:{}", audio_dev.unwrap_or("none")));
+    if let Some((x, y, w, h)) = crop {
+        a.push("-vf".into());
+        a.push(format!("crop={}:{}:{x}:{y}", even(w), even(h)));
+    }
+    a.extend(encode_tail(audio_dev.is_some(), out));
+    a
+}
+
+/// The audio devices in `ffmpeg -list_devices true -f dshow -i dummy`'s stderr, by name (the id
+/// `-i audio=<name>` takes).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn parse_dshow_audio(out: &str) -> Vec<Mic> {
+    out.lines()
+        .filter(|l| l.trim_end().ends_with("(audio)"))
+        .filter_map(|l| {
+            let name = l.split_once('"')?.1.split_once('"')?.0;
+            Some(Mic {
+                id: name.into(),
+                label: name.into(),
+            })
+        })
+        .collect()
+}
+
+/// `ffmpeg -f avfoundation -list_devices true -i ""`'s stderr → the screens as (N of "Capture
+/// screen N", its video device index), and the audio devices (id: their index).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn parse_avfoundation(out: &str) -> (Vec<(usize, usize)>, Vec<Mic>) {
+    let (mut screens, mut mics, mut audio) = (vec![], vec![], false);
+    for line in out.lines() {
+        if line.contains("audio devices:") {
+            audio = true;
+            continue;
+        }
+        let Some((_, rest)) = line.split_once("] [") else {
+            continue;
+        };
+        let Some((idx, name)) = rest.split_once("] ") else {
+            continue;
+        };
+        let Ok(idx) = idx.parse::<usize>() else {
+            continue;
+        };
+        if audio {
+            mics.push(Mic {
+                id: idx.to_string(),
+                label: name.trim().into(),
+            });
+        } else if let Some(Ok(n)) = name.trim().strip_prefix("Capture screen ").map(str::parse) {
+            screens.push((n, idx));
+        }
+    }
+    (screens, mics)
+}
+
+/// ffmpeg's device list on macOS (on stderr; ffmpeg then fails, as there's no input).
+#[cfg(target_os = "macos")]
+const AVFOUNDATION_LIST: [&str; 7] = [
+    "-hide_banner",
+    "-f",
+    "avfoundation",
+    "-list_devices",
+    "true",
+    "-i",
+    "",
+];
+
+/// This OS's grab of `r` (`full`: its whole monitor). On macOS it first runs `ffmpeg` (up to 5 s)
+/// to find the screen's avfoundation device: call it before taking the recording lock.
 pub fn record_args(
-    _r: Region,
-    _display: &str,
-    _fps: u8,
-    _mic: Option<&str>,
-    _out: &Path,
+    ffmpeg: &Path,
+    r: Region,
+    display: &str,
+    full: bool,
+    fps: u8,
+    mic: Option<&str>,
+    out: &Path,
 ) -> Result<Vec<String>, String> {
-    Err(LATER.into())
+    #[cfg(target_os = "linux")]
+    {
+        let _ = (ffmpeg, full);
+        Ok(x11grab_args(r, display, fps, mic, out))
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = (ffmpeg, display, full);
+        Ok(gdigrab_args(r, fps, mic, out))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = display;
+        let mut cmd = ffmpeg_command(ffmpeg);
+        cmd.args(AVFOUNDATION_LIST);
+        let list = output_within(cmd, Duration::from_secs(5))?;
+        let (screens, _) = parse_avfoundation(&String::from_utf8_lossy(&list.stderr));
+        let dev = screens
+            .iter()
+            .find(|(n, _)| *n == r.screen)
+            .map(|(_, d)| *d)
+            .ok_or("ffmpeg doesn't list this screen for recording")?;
+        let crop = (!full).then_some((r.lx, r.ly, r.w, r.h));
+        Ok(avfoundation_args(dev, mic, crop, fps, out))
+    }
 }
 
 pub fn remux_args(mkv: &Path, mp4: &Path) -> Vec<String> {
@@ -369,19 +536,31 @@ fn leftovers(mkv: &Path) -> String {
 pub fn start(app: &AppHandle, region: Region, full: bool) -> Result<(), String> {
     let state = app.state::<AppState>();
     let cfg = state.config.lock().unwrap().clone();
+    let ffmpeg = ffmpeg_path().ok_or(NO_FFMPEG)?;
+    // Picked before the lock, since the arguments name it: two racing starts may pick the same
+    // name, but only one of them gets the slot and spawns.
+    let mp4 = store::new_recording_path(&cfg).map_err(err)?;
+    let mkv = store::raw_recording(&mp4);
+    let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".into());
+    let fps = if cfg.fps == 60 { 60 } else { 30 };
+    // Not under the lock: on macOS this runs ffmpeg to find the screen (up to 5 s), which would
+    // block `is_recording` and `recording_info` on the main thread meanwhile.
+    let args = record_args(
+        &ffmpeg,
+        region,
+        &display,
+        full,
+        fps,
+        cfg.mic.as_deref(),
+        &mkv,
+    )?;
     // Checked, spawned and stored under one lock: two racing starts can't both spawn an ffmpeg.
     let id = {
         let mut slot = state.recording.lock().unwrap();
         if slot.is_some() {
             return Err("Already recording".into());
         }
-        let ffmpeg = ffmpeg_path().ok_or(NO_FFMPEG)?;
-        let mp4 = store::new_recording_path(&cfg).map_err(err)?;
-        let mkv = store::raw_recording(&mp4);
-        let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".into());
-        let fps = if cfg.fps == 60 { 60 } else { 30 };
-        let args = record_args(region, &display, fps, cfg.mic.as_deref(), &mkv)?;
-        let mut cmd = Command::new(&ffmpeg);
+        let mut cmd = ffmpeg_command(&ffmpeg);
         cmd.args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -417,11 +596,18 @@ pub fn start(app: &AppHandle, region: Region, full: bool) -> Result<(), String> 
 }
 
 /// Spawns ffmpeg from a thread that lives exactly as long as ffmpeg (it drains ffmpeg's stdout to
-/// EOF, feeding `level` when set). On Linux, ffmpeg gets SIGTERM when that thread ends, which
-/// includes rshot dying: a killed rshot must not leave the screen being recorded. (The parent
-/// death signal is per thread, so it can't come from a short-lived caller thread.) When rshot is
-/// killed outright, the kernel re-sends the signal each time ffmpeg is reparented to a still-dying
-/// thread, so ffmpeg hard-exits (> 3 signals): the MKV keeps what was flushed, as after a crash.
+/// EOF, feeding `level` when set). A killed rshot must not leave the screen being recorded:
+/// - Linux: ffmpeg gets SIGTERM when that thread ends, which includes rshot dying. (The parent
+///   death signal is per thread, so it can't come from a short-lived caller thread.) When rshot is
+///   killed outright, the kernel re-sends the signal each time ffmpeg is reparented to a
+///   still-dying thread, so ffmpeg hard-exits (> 3 signals): the MKV keeps what was flushed, as
+///   after a crash.
+/// - Windows: ffmpeg joins a job object that kills it when rshot's handle to it closes, i.e. when
+///   rshot exits, however it ends.
+///
+/// ponytail: macOS has neither, so a killed rshot (not a Quit, which stops the recording) leaves
+/// ffmpeg recording until it's killed or the disk is full. Upgrade: a tiny parent-watch in the
+/// child (kqueue EVFILT_PROC NOTE_EXIT on rshot's pid) that sends ffmpeg `q`.
 fn spawn_tied(mut cmd: Command, level: Option<Arc<AtomicU32>>) -> Result<Child, String> {
     #[cfg(target_os = "linux")]
     {
@@ -442,6 +628,12 @@ fn spawn_tied(mut cmd: Command, level: Option<Arc<AtomicU32>>) -> Result<Child, 
             Ok(c) => c,
             Err(e) => return drop(tx.send(Err(format!("ffmpeg: {e}")))),
         };
+        #[cfg(windows)]
+        if let Err(e) = kill_with_rshot(&child) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return drop(tx.send(Err(format!("ffmpeg: {e}"))));
+        }
         let out = child.stdout.take().expect("stdout is piped");
         if tx.send(Ok(child)).is_err() {
             return;
@@ -459,6 +651,42 @@ fn spawn_tied(mut cmd: Command, level: Option<Arc<AtomicU32>>) -> Result<Child, 
         let _ = std::io::copy(&mut reader, &mut std::io::sink());
     });
     rx.recv().map_err(err)?
+}
+
+/// Windows: puts `child` in rshot's job, which kills its processes once its only handle (never
+/// closed, so it closes as rshot exits) goes.
+#[cfg(windows)]
+fn kill_with_rshot(child: &Child) -> Result<(), String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::{
+        Foundation::HANDLE,
+        System::JobObjects::{
+            AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+            SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        },
+    };
+    // The handle as an integer: a raw pointer isn't Sync, so it can't sit in a static.
+    static JOB: std::sync::OnceLock<Result<isize, String>> = std::sync::OnceLock::new();
+    let job = JOB.get_or_init(|| {
+        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        // SAFETY: a fresh unnamed job; `limits` outlives the call, which reads its exact size.
+        unsafe {
+            let job = CreateJobObjectW(None, windows::core::PCWSTR::null()).map_err(err)?;
+            SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                std::ptr::from_ref(&limits).cast(),
+                std::mem::size_of_val(&limits) as u32,
+            )
+            .map_err(err)?;
+            Ok(job.0 as isize)
+        }
+    });
+    let job = HANDLE(job.clone()? as *mut std::ffi::c_void);
+    // SAFETY: both handles are open: the job's for rshot's lifetime, the child's while `child` is.
+    unsafe { AssignProcessToJobObject(job, HANDLE(child.as_raw_handle())) }.map_err(err)
 }
 
 /// Ticks the tray timer; if ffmpeg dies on its own, keeps the MKV and tells the user.
@@ -531,7 +759,7 @@ fn end(rec: &mut Recording) {
 /// which reserves the name, goes last. On failure the MKV stays.
 fn finalize(ffmpeg: &Path, mkv: &Path, mp4: &Path) -> Result<(), String> {
     let part = mkv.with_extension("part.mp4");
-    Command::new(ffmpeg)
+    ffmpeg_command(ffmpeg)
         .args(remux_args(mkv, &part))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -683,11 +911,37 @@ pub async fn list_mics() -> Vec<Mic> {
         let Some(ffmpeg) = ffmpeg_path() else {
             return Vec::new();
         };
-        let mut cmd = Command::new(ffmpeg);
+        let mut cmd = ffmpeg_command(&ffmpeg);
+        #[cfg(target_os = "linux")]
         cmd.args(["-hide_banner", "-sources", "pulse"]);
-        output_within(cmd, Duration::from_secs(5))
-            .map(|o| parse_pulse_sources(&String::from_utf8_lossy(&o.stdout)))
-            .unwrap_or_default()
+        #[cfg(windows)]
+        cmd.args([
+            "-hide_banner",
+            "-list_devices",
+            "true",
+            "-f",
+            "dshow",
+            "-i",
+            "dummy",
+        ]);
+        #[cfg(target_os = "macos")]
+        cmd.args(AVFOUNDATION_LIST);
+        let Ok(o) = output_within(cmd, Duration::from_secs(5)) else {
+            return Vec::new();
+        };
+        // Windows and macOS list on stderr (then ffmpeg fails: there's no input).
+        #[cfg(target_os = "linux")]
+        {
+            parse_pulse_sources(&String::from_utf8_lossy(&o.stdout))
+        }
+        #[cfg(windows)]
+        {
+            parse_dshow_audio(&String::from_utf8_lossy(&o.stderr))
+        }
+        #[cfg(target_os = "macos")]
+        {
+            parse_avfoundation(&String::from_utf8_lossy(&o.stderr)).1
+        }
     })
     .await
     .unwrap_or_default()
@@ -701,7 +955,6 @@ mod tests {
         v.iter().map(|x| x.to_string()).collect()
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
     fn even_rounds_down() {
         assert_eq!(even(871), 870);
@@ -726,7 +979,6 @@ mod tests {
         );
     }
 
-    #[cfg(target_os = "linux")]
     #[test]
     fn record_args_grab_x11_with_optional_mic() {
         let r = Region {
@@ -734,8 +986,11 @@ mod tests {
             y: 10,
             w: 871,
             h: 569,
+            screen: 0,
+            lx: 0,
+            ly: 0,
         };
-        let a = record_args(r, ":1", 30, None, Path::new("/v/.R.mkv")).unwrap();
+        let a = x11grab_args(r, ":1", 30, None, Path::new("/v/.R.mkv"));
         assert_eq!(
             a,
             s(&[
@@ -768,7 +1023,7 @@ mod tests {
                 "/v/.R.mkv",
             ])
         );
-        let m = record_args(r, ":1", 60, Some("alsa_input.usb"), Path::new("/v/.R.mkv")).unwrap();
+        let m = x11grab_args(r, ":1", 60, Some("alsa_input.usb"), Path::new("/v/.R.mkv"));
         assert_eq!(
             m,
             s(&[
@@ -813,6 +1068,121 @@ mod tests {
         );
     }
 
+    /// The encode tail every grabber shares: H.264, then with a mic AAC and the level meter, then
+    /// the crash-safe cluster flags and the output.
+    fn tail(mic: bool, out: &str) -> Vec<String> {
+        let mut t = s(&[
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+        ]);
+        if mic {
+            t.extend(s(&[
+                "-c:a",
+                "aac",
+                "-b:a",
+                "160k",
+                "-af",
+                "asetnsamples=n=4800:p=0,astats=metadata=1:reset=1,ametadata=mode=print:key=lavfi.astats.Overall.RMS_level:file='pipe\\:1':direct=1",
+            ]));
+        }
+        t.extend(s(&[
+            "-cluster_time_limit",
+            "1000",
+            "-flush_packets",
+            "1",
+            "-y",
+            out,
+        ]));
+        t
+    }
+
+    #[test]
+    fn gdigrab_args_offset_and_mic() {
+        let r = Region {
+            x: -1920,
+            y: 0,
+            w: 1281,
+            h: 720,
+            screen: 0,
+            lx: 0,
+            ly: 0,
+        };
+        let a = gdigrab_args(
+            r,
+            30,
+            Some("Microphone (Realtek)"),
+            Path::new("C:/v/.R.mkv"),
+        );
+        assert!(a
+            .windows(4)
+            .any(|w| w == s(&["-offset_x", "-1920", "-offset_y", "0"])));
+        assert!(a.windows(2).any(|w| w == s(&["-video_size", "1280x720"])));
+        assert!(a
+            .windows(4)
+            .any(|w| w == s(&["-f", "dshow", "-i", "audio=Microphone (Realtek)"])));
+        assert!(a.windows(2).any(|w| w == s(&["-i", "desktop"])));
+        assert!(a.ends_with(&tail(true, "C:/v/.R.mkv")));
+        let b = gdigrab_args(r, 60, None, Path::new("C:/v/.R.mkv"));
+        assert!(!b.iter().any(|x| x == "dshow"));
+        assert!(b.ends_with(&tail(false, "C:/v/.R.mkv")));
+    }
+
+    #[test]
+    fn parses_dshow_audio_devices() {
+        let out = "[dshow @ 000001] \"Integrated Camera\" (video)\n[dshow @ 000001]   Alternative name \"@device_pnp_x\"\n[dshow @ 000001] \"Microphone (Realtek(R) Audio)\" (audio)\n[dshow @ 000001]   Alternative name \"@device_cm_y\"\n";
+        assert_eq!(
+            parse_dshow_audio(out),
+            vec![Mic {
+                id: "Microphone (Realtek(R) Audio)".into(),
+                label: "Microphone (Realtek(R) Audio)".into()
+            }]
+        );
+        // ffmpeg 7+ tags the lines with the input instead, and ends with an error (no input given).
+        let newer = "[in#0 @ 0000021a] \"Mikrofon (USB Audio)\" (audio)\r\n[in#0 @ 0000021a]   Alternative name \"@device_cm_{33D9}\"\r\n[in#0 @ 0000021a] Error opening input: Immediate exit requested\r\n";
+        assert_eq!(
+            parse_dshow_audio(newer),
+            vec![Mic {
+                id: "Mikrofon (USB Audio)".into(),
+                label: "Mikrofon (USB Audio)".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn parses_avfoundation_devices() {
+        let out = "[AVFoundation indev @ 0x1] AVFoundation video devices:\n[AVFoundation indev @ 0x1] [0] FaceTime HD Camera\n[AVFoundation indev @ 0x1] [1] Capture screen 0\n[AVFoundation indev @ 0x1] [2] Capture screen 1\n[AVFoundation indev @ 0x1] AVFoundation audio devices:\n[AVFoundation indev @ 0x1] [0] MacBook Pro Microphone\n";
+        let (screens, mics) = parse_avfoundation(out);
+        assert_eq!(screens, vec![(0, 1), (1, 2)]);
+        assert_eq!(
+            mics,
+            vec![Mic {
+                id: "0".into(),
+                label: "MacBook Pro Microphone".into()
+            }]
+        );
+        assert_eq!(
+            parse_avfoundation("[in#0 @ 0x2] Error opening input: Input/output error\n"),
+            (vec![], vec![])
+        );
+    }
+
+    #[test]
+    fn avfoundation_args_crop_in_pixels() {
+        let a = avfoundation_args(
+            1,
+            Some("0"),
+            Some((10, 20, 641, 480)),
+            60,
+            Path::new("/v/.R.mkv"),
+        );
+        assert!(a.windows(2).any(|w| w == s(&["-i", "1:0"])));
+        assert!(a.windows(2).any(|w| w == s(&["-vf", "crop=640:480:10:20"])));
+        assert!(a.ends_with(&tail(true, "/v/.R.mkv")));
+        let b = avfoundation_args(1, None, None, 30, Path::new("/o.mkv"));
+        assert!(b.windows(2).any(|w| w == s(&["-i", "1:none"])));
+        assert!(!b.iter().any(|x| x == "-vf"));
+        assert!(b.ends_with(&tail(false, "/o.mkv")));
+    }
+
     #[test]
     fn mic_level_lines_parse_to_clamped_db() {
         assert_eq!(
@@ -853,11 +1223,14 @@ mod tests {
             y: 0,
             w: 320,
             h: 240,
+            screen: 0,
+            lx: 0,
+            ly: 0,
         };
-        let mut args = record_args(region, &display, 30, None, &mkv).unwrap();
+        let mut args = record_args(&ffmpeg, region, &display, false, 30, None, &mkv).unwrap();
         args.splice(args.len() - 2..args.len() - 2, strs(&["-t", "1"]));
         let run = |args: &[String]| {
-            std::process::Command::new(&ffmpeg)
+            ffmpeg_command(&ffmpeg)
                 .args(args)
                 .status()
                 .unwrap()

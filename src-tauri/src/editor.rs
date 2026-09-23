@@ -119,7 +119,7 @@ pub async fn trim_video(
     let tmp = canon.with_file_name(format!(".{stem}.trim.mp4"));
     let args = crate::recorder::trim_args(&canon, start, end, mute, &tmp);
     let trimmed = tauri::async_runtime::spawn_blocking(move || {
-        std::process::Command::new(ffmpeg)
+        crate::recorder::ffmpeg_command(&ffmpeg)
             .args(args)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())

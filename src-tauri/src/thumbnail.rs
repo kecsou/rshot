@@ -136,7 +136,7 @@ pub async fn video_poster(app: AppHandle, path: String) -> Result<Response, Stri
         return Err("not a recording".into());
     }
     let ffmpeg = crate::recorder::ffmpeg_path().ok_or(crate::recorder::NO_FFMPEG)?;
-    let mut cmd = std::process::Command::new(ffmpeg);
+    let mut cmd = crate::recorder::ffmpeg_command(&ffmpeg);
     cmd.args(crate::recorder::poster_args(&canon, 460));
     let out = tauri::async_runtime::spawn_blocking(move || {
         crate::recorder::output_within(cmd, std::time::Duration::from_secs(10))

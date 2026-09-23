@@ -74,7 +74,8 @@ pub struct Config {
     /// hotkeys), kept while rshot owns them.
     pub gnome_backup: Option<BTreeMap<String, String>>,
     pub recordings_dir: Option<PathBuf>,
-    /// PulseAudio/PipeWire source id; `None` records no sound.
+    /// PulseAudio/PipeWire source id (Windows: DirectShow device name, macOS: AVFoundation audio
+    /// device index); `None` records no sound.
     pub mic: Option<String>,
     pub fps: u8,
 }
@@ -210,8 +211,9 @@ pub fn raw_recording(mp4: &Path) -> PathBuf {
 }
 
 /// A name is taken while its MP4 or its raw file exists (one of them does throughout a remux).
-/// ponytail: an exists() check, not a claim; fine while starts are serialised (the recorder picks
-/// the name under its lock). Claim with create_new if that ever changes.
+/// ponytail: an exists() check, not a claim; fine while starts are serialised (two racing starts
+/// may pick the same name, but only the one that gets the recorder's slot spawns). Claim with
+/// create_new if that ever changes.
 fn free_recording(dir: &Path, stem: &str) -> PathBuf {
     numbered(dir, stem, "mp4")
         .find(|p| !p.exists() && !raw_recording(p).exists())
