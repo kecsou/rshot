@@ -22,6 +22,7 @@ pub fn err(e: impl std::fmt::Display) -> String {
 }
 
 /// Lock order: session → config; last_capture → thumb; `editors`, `recording` and `pending_rec` are never held with another lock; never hold a mutex across a Tauri call that needs the main thread.
+/// `recorder`'s ENDING: never lock it on the main thread (a stop holds it through a remux); use `is_ending()` there.
 pub struct AppState {
     pub config: std::sync::Mutex<store::Config>,
     pub clipboard: clipboard::Clipboard,
@@ -163,6 +164,8 @@ fn main() {
                 pipeline::notify(app.handle(), &e);
             }
             dispatch(app.handle(), cmd);
+            let app = app.handle().clone();
+            std::thread::spawn(move || recorder::recover(&app));
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -219,9 +222,10 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
         CaptureScreen => pipeline::capture_screen_now(app),
         CaptureWindow => pipeline::capture_window_now(app),
         Record => {
-            if recorder::is_recording(app) {
+            if recorder::is_recording(app) || recorder::is_ending() {
                 // Off this handler (the CLI waits on it), like the tray. Stopping is a no-op if the
-                // watchdog ended the recording meanwhile; it has already told the user.
+                // watchdog ended the recording meanwhile (it has already told the user), or if one
+                // is being saved: no new overlay then either.
                 let app = app.clone();
                 std::thread::spawn(move || {
                     if let Err(e) = recorder::stop(&app) {
@@ -229,8 +233,8 @@ pub fn dispatch(app: &AppHandle, cmd: cli::Cmd) {
                     }
                 });
                 Ok(())
-            } else if recorder::ffmpeg_path().is_none() {
-                Err(recorder::NO_FFMPEG.into())
+            } else if let Some(why) = recorder::unavailable(app) {
+                Err(why.into())
             } else {
                 overlay::start(app, "recarea")
             }

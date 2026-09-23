@@ -72,12 +72,19 @@ pub const NO_FFMPEG: &str =
 pub const NO_FFMPEG: &str =
     "Recording needs ffmpeg, which wasn't found. Reinstall rshot, or put ffmpeg.exe on your PATH.";
 
-/// Why a new recording can't start now (no ffmpeg, or one is running); `None` when it can.
+const LATER: &str = "Recording on this OS arrives in a later version.";
+
+/// Why a new recording can't start now (not on this OS yet, no ffmpeg, one is running or still
+/// being saved); `None` when it can.
 pub fn unavailable(app: &AppHandle) -> Option<&'static str> {
-    if ffmpeg_path().is_none() {
+    if cfg!(not(target_os = "linux")) {
+        Some(LATER)
+    } else if ffmpeg_path().is_none() {
         Some(NO_FFMPEG)
     } else if is_recording(app) {
         Some("A recording is already running: stop it first.")
+    } else if is_ending() {
+        Some("The last recording is still being saved.")
     } else {
         None
     }
@@ -182,7 +189,7 @@ pub fn record_args(
     _mic: Option<&str>,
     _out: &Path,
 ) -> Result<Vec<String>, String> {
-    Err("Recording on this OS arrives in a later version.".into())
+    Err(LATER.into())
 }
 
 pub fn remux_args(mkv: &Path, mp4: &Path) -> Vec<String> {
@@ -372,7 +379,8 @@ pub fn start(app: &AppHandle, region: Region, full: bool) -> Result<(), String> 
         let mp4 = store::new_recording_path(&cfg).map_err(err)?;
         let mkv = store::raw_recording(&mp4);
         let display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".into());
-        let args = record_args(region, &display, cfg.fps, cfg.mic.as_deref(), &mkv)?;
+        let fps = if cfg.fps == 60 { 60 } else { 30 };
+        let args = record_args(region, &display, fps, cfg.mic.as_deref(), &mkv)?;
         let mut cmd = Command::new(&ffmpeg);
         cmd.args(&args)
             .stdin(Stdio::piped())
@@ -519,35 +527,94 @@ fn end(rec: &mut Recording) {
     let _ = rec.child.wait();
 }
 
-/// Ends the recording and turns it into the MP4 (written atomically: a hidden `.part.mp4`, then
-/// renamed; the MKV, which reserves the name, goes last). Nothing to do when none is running, e.g.
-/// the watchdog already ended it. Blocks for up to ~10 s (and waits for a stop or a discard
-/// already under way): not on the main thread.
-pub fn stop(app: &AppHandle) -> Result<(), String> {
-    let _ending = ending();
-    let Some(mut rec) = take(app) else {
-        return Ok(());
-    };
-    end(&mut rec);
-    let part = rec.mkv.with_extension("part.mp4");
-    let remuxed = Command::new(&rec.ffmpeg)
-        .args(remux_args(&rec.mkv, &part))
+/// Remuxes the raw `mkv` into `mp4`, atomically (a hidden `.part.mp4`, then renamed); the MKV,
+/// which reserves the name, goes last. On failure the MKV stays.
+fn finalize(ffmpeg: &Path, mkv: &Path, mp4: &Path) -> Result<(), String> {
+    let part = mkv.with_extension("part.mp4");
+    Command::new(ffmpeg)
+        .args(remux_args(mkv, &part))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(ffmpeg_log(true))
         .status()
         .map_err(err)
         .and_then(|s| s.success().then_some(()).ok_or(s.to_string()))
-        .and_then(|()| std::fs::rename(&part, &rec.mp4).map_err(err));
-    if let Err(e) = remuxed {
-        let _ = std::fs::remove_file(&part);
-        return Err(format!(
+        .and_then(|()| std::fs::rename(&part, mp4).map_err(err))
+        .inspect_err(|_| {
+            let _ = std::fs::remove_file(&part);
+        })?;
+    let _ = std::fs::remove_file(mkv);
+    Ok(())
+}
+
+/// Ends the recording and turns it into the MP4. Nothing to do when none is running, e.g. the
+/// watchdog already ended it. Blocks for up to ~10 s (and waits for a stop or a discard already
+/// under way): not on the main thread.
+pub fn stop(app: &AppHandle) -> Result<(), String> {
+    let _ending = ending();
+    let Some(mut rec) = take(app) else {
+        return Ok(());
+    };
+    end(&mut rec);
+    finalize(&rec.ffmpeg, &rec.mkv, &rec.mp4).map_err(|e| {
+        format!(
             "Couldn't finish the recording ({e}). {}",
             leftovers(&rec.mkv)
-        ));
-    }
-    let _ = std::fs::remove_file(&rec.mkv);
+        )
+    })?;
     pipeline::finish_video(app, &rec.mp4)
+}
+
+/// At startup: a recording no rshot finished (logout, shutdown, crash, kill) left its raw MKV in
+/// the recordings folder. Each becomes its MP4, and the user is told where; a stop's or a trim's
+/// stale temp goes. Not on the main thread.
+pub fn recover(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let dir = store::recordings_dir(&state.config.lock().unwrap());
+    // Listed under the recording lock, with none running or ending: one started afterwards gets a
+    // name that's free, so its MKV can't be in the list.
+    let names: Vec<String> = {
+        let slot = state.recording.lock().unwrap();
+        if slot.is_some() || is_ending() {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return;
+        };
+        entries
+            .filter_map(|e| e.ok()?.file_name().into_string().ok())
+            .collect()
+    };
+    for name in names.iter().filter(|n| store::stale_temp(n)) {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let Some(ffmpeg) = ffmpeg_path() else {
+        return;
+    };
+    for (name, stem) in names
+        .iter()
+        .filter_map(|n| Some((n, store::orphan_stem(n)?)))
+    {
+        let mkv = dir.join(name);
+        let mp4 = store::unused(&dir, stem, "mp4");
+        let msg = match finalize(&ffmpeg, &mkv, &mp4) {
+            Ok(()) => format!("Recovered an interrupted recording: {}", mp4.display()),
+            Err(e) => {
+                // Kept under a visible name, so it isn't retried (and notified) at every start.
+                let kept = store::unused(&dir, stem, "mkv");
+                let mkv = if std::fs::rename(&mkv, &kept).is_ok() {
+                    kept
+                } else {
+                    mkv
+                };
+                format!(
+                    "Couldn't recover an interrupted recording ({e}). {}",
+                    leftovers(&mkv)
+                )
+            }
+        };
+        pipeline::notify(app, &msg);
+    }
 }
 
 pub fn discard(app: &AppHandle) {
@@ -583,28 +650,37 @@ pub fn recording_info(state: State<'_, AppState>) -> Option<RecordingInfo> {
         })
 }
 
+// Stop and discard can wait ~10 s for ffmpeg, and listing the mics runs it: on a blocking thread,
+// neither on the main thread nor on an async worker.
+
 #[tauri::command]
 pub async fn recording_stop(app: AppHandle) -> Result<(), String> {
-    stop(&app).inspect_err(|e| pipeline::notify(&app, e))
+    tauri::async_runtime::spawn_blocking(move || {
+        stop(&app).inspect_err(|e| pipeline::notify(&app, e))
+    })
+    .await
+    .map_err(err)?
 }
 
-/// Async: `end` can wait up to 10 s, which must not freeze the main thread.
 #[tauri::command]
 pub async fn recording_discard(app: AppHandle) {
-    discard(&app);
+    let _ = tauri::async_runtime::spawn_blocking(move || discard(&app)).await;
 }
 
 #[tauri::command]
 pub async fn list_mics() -> Vec<Mic> {
-    let Some(ffmpeg) = ffmpeg_path() else {
-        return Vec::new();
-    };
-    Command::new(ffmpeg)
-        .args(["-hide_banner", "-sources", "pulse"])
-        .stdin(Stdio::null())
-        .output()
-        .map(|o| parse_pulse_sources(&String::from_utf8_lossy(&o.stdout)))
-        .unwrap_or_default()
+    tauri::async_runtime::spawn_blocking(|| {
+        let Some(ffmpeg) = ffmpeg_path() else {
+            return Vec::new();
+        };
+        let mut cmd = Command::new(ffmpeg);
+        cmd.args(["-hide_banner", "-sources", "pulse"]);
+        output_within(cmd, Duration::from_secs(5))
+            .map(|o| parse_pulse_sources(&String::from_utf8_lossy(&o.stdout)))
+            .unwrap_or_default()
+    })
+    .await
+    .unwrap_or_default()
 }
 
 #[cfg(test)]

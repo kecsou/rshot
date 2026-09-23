@@ -210,6 +210,26 @@ fn free_recording(dir: &Path, stem: &str) -> PathBuf {
         .expect("an unused name exists")
 }
 
+/// `stem.ext`, else `stem_2.ext`, `stem_3.ext`…: the first that doesn't exist. (Unlike
+/// `free_recording`, a raw file doesn't reserve the name: recovery turns that very file into it.)
+pub fn unused(dir: &Path, stem: &str, ext: &str) -> PathBuf {
+    numbered(dir, stem, ext)
+        .find(|p| !p.exists())
+        .expect("an unused name exists")
+}
+
+/// A raw file no rshot finished (`.Recording_….mkv`: logout, crash, kill) → its recording's stem.
+pub fn orphan_stem(name: &str) -> Option<&str> {
+    name.strip_prefix('.')?
+        .strip_suffix(".mkv")
+        .filter(|s| s.starts_with("Recording_"))
+}
+
+/// A stop's or a trim's hidden temp output (`.….part.mp4`, `.….trim.mp4`).
+pub fn stale_temp(name: &str) -> bool {
+    name.starts_with('.') && (name.ends_with(".part.mp4") || name.ends_with(".trim.mp4"))
+}
+
 /// `stem.ext`, `stem_2.ext`, `stem_3.ext`…
 fn numbered<'a>(dir: &'a Path, stem: &'a str, ext: &'a str) -> impl Iterator<Item = PathBuf> + 'a {
     (1..).map(move |n| match n {
@@ -465,6 +485,36 @@ mod tests {
         // Still being remuxed (or kept after a crash): its raw file holds the name too.
         fs::write(d.join(".R_2.mkv"), b"").unwrap();
         assert_eq!(free_recording(&d, "R"), d.join("R_3.mp4"));
+        fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn leftovers_are_told_apart_by_name() {
+        let stem = "Recording_2026-09-22_10-00-00";
+        assert_eq!(orphan_stem(&format!(".{stem}.mkv")), Some(stem));
+        assert_eq!(
+            orphan_stem(&format!(".{stem}_2.mkv")),
+            Some(&*format!("{stem}_2"))
+        );
+        assert_eq!(
+            orphan_stem(&format!("{stem}.mkv")),
+            None,
+            "visible: the user's"
+        );
+        assert_eq!(orphan_stem(".Holiday.mkv"), None);
+        assert_eq!(orphan_stem(&format!(".{stem}.part.mp4")), None);
+        assert!(stale_temp(&format!(".{stem}.part.mp4")));
+        assert!(stale_temp(".Holiday.trim.mp4"));
+        assert!(!stale_temp(&format!("{stem}.mp4")));
+        assert!(!stale_temp("Holiday.part.mp4"));
+        assert!(!stale_temp(&format!(".{stem}.mkv")));
+        // The orphan's own raw file doesn't keep it from its name.
+        let d = tmp("unused");
+        fs::write(d.join(".R.mkv"), b"").unwrap();
+        assert_eq!(unused(&d, "R", "mp4"), d.join("R.mp4"));
+        fs::write(d.join("R.mp4"), b"").unwrap();
+        assert_eq!(unused(&d, "R", "mp4"), d.join("R_2.mp4"));
+        assert_eq!(unused(&d, "R", "mkv"), d.join("R.mkv"));
         fs::remove_dir_all(&d).unwrap();
     }
 
