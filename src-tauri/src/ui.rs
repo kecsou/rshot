@@ -318,20 +318,21 @@ fn monitor_at(app: &AppHandle, x: f64, y: f64) -> Result<tauri::Monitor, String>
 }
 
 /// One editor per file: refocus it if it's open, otherwise open one at 80 % of the monitor under
-/// the pointer. The map holds canonical paths, so the thumbnail and the tray find the same window.
+/// the pointer. Windows are matched on the canonical path, so the thumbnail and the tray find the
+/// same one; the editor keeps `path` as given for display and the clipboard.
 pub fn open_editor(app: &AppHandle, path: &std::path::Path) -> Result<(), String> {
-    let path = path.canonicalize().map_err(err)?;
+    let canon = path.canonicalize().map_err(err)?;
     let state = app.state::<crate::AppState>();
     let existing = state
         .editors
         .lock()
         .unwrap()
         .iter()
-        .find(|(_, p)| **p == path)
+        .find(|(_, (_, c))| *c == canon)
         .map(|(label, _)| label.clone());
     let win = match existing.and_then(|label| app.get_webview_window(&label)) {
         Some(w) => w,
-        None => new_editor(app, path)?,
+        None => new_editor(app, path.to_path_buf(), canon)?,
     };
     win.show().map_err(err)?;
     win.set_focus().map_err(err)?;
@@ -341,7 +342,11 @@ pub fn open_editor(app: &AppHandle, path: &std::path::Path) -> Result<(), String
     Ok(())
 }
 
-fn new_editor(app: &AppHandle, path: std::path::PathBuf) -> Result<WebviewWindow, String> {
+fn new_editor(
+    app: &AppHandle,
+    path: std::path::PathBuf,
+    canon: std::path::PathBuf,
+) -> Result<WebviewWindow, String> {
     let cursor = app.cursor_position().map_err(err)?;
     let m = monitor_at(app, cursor.x, cursor.y)?;
     let s = m.scale_factor();
@@ -359,7 +364,7 @@ fn new_editor(app: &AppHandle, path: std::path::PathBuf) -> Result<WebviewWindow
         .editors
         .lock()
         .unwrap()
-        .insert(label.clone(), path);
+        .insert(label.clone(), (path, canon));
     let win = WebviewWindowBuilder::new(app, &label, WebviewUrl::App("editor/index.html".into()))
         .title(format!("{name} — rshot"))
         .decorations(false)

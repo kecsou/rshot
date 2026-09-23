@@ -22,14 +22,19 @@ pub fn tildify(p: &Path) -> String {
 }
 
 /// Only the last capture and files open in an editor may be read, opened or deleted from a
-/// webview. All paths are canonical. (The screenshots folder is settable from a webview, so
-/// "anything in it" would be a hole.)
-fn allowed(p: &Path, last: Option<&Path>, open: &[PathBuf]) -> bool {
-    last == Some(p) || open.iter().any(|o| o == p)
+/// webview; `last` and `open` are canonical. (The screenshots folder is settable from a webview,
+/// so "anything in it" would be a hole.) Returns `path` as given, not canonical, so the clipboard
+/// and the editor keep the path the user already has, even through a symlinked folder.
+fn check(path: &str, last: Option<&Path>, open: &[PathBuf]) -> Result<PathBuf, String> {
+    let p = Path::new(path).canonicalize().map_err(err)?;
+    if last == Some(p.as_path()) || open.contains(&p) {
+        Ok(PathBuf::from(path))
+    } else {
+        Err("not the last capture or a file open in the editor".into())
+    }
 }
 
 pub(crate) fn guard(state: &AppState, path: &str) -> Result<PathBuf, String> {
-    let p = Path::new(path).canonicalize().map_err(err)?;
     let last = state
         .last_capture
         .lock()
@@ -38,12 +43,14 @@ pub(crate) fn guard(state: &AppState, path: &str) -> Result<PathBuf, String> {
         .and_then(|l| l.canonicalize().ok());
     // Editor paths were canonicalized when opened: compare as is, so a file swapped for a
     // symlink since then doesn't pass.
-    let open: Vec<PathBuf> = state.editors.lock().unwrap().values().cloned().collect();
-    if allowed(&p, last.as_deref(), &open) {
-        Ok(p)
-    } else {
-        Err("not the last capture or a file open in the editor".into())
-    }
+    let open: Vec<PathBuf> = state
+        .editors
+        .lock()
+        .unwrap()
+        .values()
+        .map(|(_, canon)| canon.clone())
+        .collect();
+    check(path, last.as_deref(), &open)
 }
 
 #[tauri::command]
@@ -111,7 +118,7 @@ mod tests {
         let last = canon(dir.join("last.png"));
         let open = [canon(dir.join("edited.png"))];
         let allowed = |p: &str, last: Option<&std::path::Path>, open: &[std::path::PathBuf]| {
-            super::allowed(&canon(dir.join(p)), last, open)
+            super::check(dir.join(p).to_str().unwrap(), last, open).is_ok()
         };
         assert!(allowed("sub/../last.png", Some(&last), &[]));
         assert!(!allowed("other.png", Some(&last), &[]));
@@ -121,6 +128,16 @@ mod tests {
         assert!(allowed("sub/../edited.png", Some(&last), &open));
         assert!(allowed("edited.png", None, &open));
         assert!(!allowed("edited.png", Some(&last), &[]));
+        // Through a symlinked folder the path comes back as given, not canonical.
+        #[cfg(unix)]
+        {
+            let link = dir.with_extension("link");
+            std::os::unix::fs::symlink(&dir, &link).unwrap();
+            let given = link.join("edited.png");
+            let got = super::check(given.to_str().unwrap(), None, &open);
+            std::fs::remove_file(&link).unwrap();
+            assert_eq!(got, Ok(given));
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

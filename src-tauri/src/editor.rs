@@ -21,7 +21,7 @@ fn editor_path(state: &AppState, window: &WebviewWindow) -> Result<PathBuf, Stri
         .lock()
         .unwrap()
         .get(window.label())
-        .cloned()
+        .map(|(opened, _)| opened.clone())
         .ok_or_else(|| "not an editor window".to_string())
 }
 
