@@ -27,7 +27,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         app,
         "record",
         RECORD_LABEL,
-        crate::recorder::ffmpeg_path().is_some(),
+        crate::recorder::unavailable(app).is_none(),
         None::<&str>,
     )?;
     let menu = Menu::with_items(
@@ -119,6 +119,21 @@ pub fn recording_started(
     if frame.is_err() {
         close_prefix(app, "recframe");
     }
+    let pill = show_pill(app, r, &m);
+    if pill.is_err() {
+        close_prefix(app, "pill");
+    }
+    recording_ui_up(app);
+    pill.and(frame)
+}
+
+/// The control pill, above the area's frame or below it, within the monitor's work area.
+fn show_pill(
+    app: &AppHandle,
+    r: crate::recorder::Region,
+    m: &tauri::Monitor,
+) -> Result<(), String> {
+    let s = m.scale_factor();
     let (pw, ph) = (300.0, 52.0);
     let pill = popup(app, "pill", "pill/index.html", pw, ph, false)?;
     // Within the work area: clear of the top bar and the dock.
@@ -138,8 +153,7 @@ pub fn recording_started(
         .map_err(err)?;
     #[cfg(target_os = "linux")]
     unmanaged(&pill)?;
-    pill.show().map_err(err)?;
-    frame
+    pill.show().map_err(err)
 }
 
 /// The dashed frame around area `r` on a monitor of scale `s`: transparent and click-through.
@@ -212,6 +226,7 @@ fn pill_position(
 }
 
 pub fn recording_stopped(app: &AppHandle) {
+    kept_hidden().1.clear();
     if let Some(item) = app.try_state::<TrayRecord>() {
         let _ = item.0.set_text(RECORD_LABEL);
     }
@@ -249,6 +264,12 @@ static QUITTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 /// meanwhile is ignored, as exiting would cut the save short.
 fn quit(app: &AppHandle) {
     use std::sync::atomic::Ordering;
+    // A countdown ending now must not start a recording.
+    app.state::<crate::AppState>()
+        .pending_rec
+        .lock()
+        .unwrap()
+        .take();
     if QUITTING.load(Ordering::Acquire) {
         return;
     }
@@ -416,7 +437,25 @@ pub fn hide_overlays(app: &AppHandle) {
         }
     }
     let _ = app.emit("overlay:hide", ());
+    // After the overlays: a recording's frame and pill come back, but never over a frozen frame.
+    let hold = OVERLAY_HOLD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
+    drop(hold);
 }
+
+/// The grab that opened the overlay keeps the recording's frame and pill hidden while it's up (they
+/// are override-redirect: they'd sit above it, the pill clickable). `hide_overlays` lets go.
+pub fn hide_recording_ui_while_overlay(hidden: Hidden) {
+    let old = OVERLAY_HOLD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .replace(hidden);
+    drop(old);
+}
+
+static OVERLAY_HOLD: std::sync::Mutex<Option<Hidden>> = std::sync::Mutex::new(None);
 
 /// Presents a window with a fresh X server timestamp so Mutter grants it focus. A re-shown
 /// preloaded overlay otherwise carries its last user time (the previous Esc), which is older than
@@ -490,9 +529,18 @@ pub fn close_prefix(app: &AppHandle, prefix: &str) -> bool {
 /// Takes rshot's own UI off the screen before a new grab, so it can't end up in the capture: an
 /// open overlay session, a countdown (dropping its pending capture or recording), the thumbnail
 /// card, and a recording's frame and pill, all always-on-top. Those two are only hidden: they come
-/// back when the returned guard drops, so drop it right after the grab. Waits for the compositor
-/// only when something was showing. Not on the main thread.
+/// back once the returned guard and every other one drop, so drop it right after the grab. Waits
+/// for the compositor only when something was up. Not on the main thread.
 pub fn clear_own_ui(app: &AppHandle) -> Hidden {
+    // First: taking the overlay session below lets go of its own hold, which mustn't show them.
+    let recording = {
+        let mut kept = kept_hidden();
+        kept.0 += 1;
+        for w in &kept.1 {
+            let _ = w.hide();
+        }
+        !kept.1.is_empty()
+    };
     let state = app.state::<crate::AppState>();
     let overlay = state.session.lock().unwrap().take().is_some();
     if overlay {
@@ -502,33 +550,54 @@ pub fn clear_own_ui(app: &AppHandle) -> Hidden {
     state.pending_rec.lock().unwrap().take();
     let countdown = close_prefix(app, "countdown");
     let thumbnail = close_prefix(app, "thumbnail");
-    let recording: Vec<WebviewWindow> = app
-        .webview_windows()
-        .into_iter()
-        .filter(|(label, w)| {
-            (label.starts_with("recframe-") || label.starts_with("pill-"))
-                && w.is_visible().unwrap_or(false)
-        })
-        .map(|(_, w)| w)
-        .collect();
-    for w in &recording {
-        let _ = w.hide();
-    }
-    if overlay || countdown || thumbnail || !recording.is_empty() {
+    if overlay || countdown || thumbnail || recording {
         std::thread::sleep(Duration::from_millis(150));
     }
-    Hidden(recording)
+    Hidden(())
 }
 
-/// A recording's frame and pill, hidden by `clear_own_ui` for a grab: shown again on drop. (A
+/// The recording's frame and pill once they're up, and how many grabs and open overlays keep them
+/// hidden: the last of those to end shows them again. Held across the hide and show calls, which
+/// only queue work for the main thread, so an earlier grab's show can't land in a later one.
+static KEPT_HIDDEN: std::sync::Mutex<(usize, Vec<WebviewWindow>)> =
+    std::sync::Mutex::new((0, Vec::new()));
+
+fn kept_hidden() -> std::sync::MutexGuard<'static, (usize, Vec<WebviewWindow>)> {
+    KEPT_HIDDEN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The frame and pill have just been shown: under a grab or an overlay they hide again at once,
+/// and come back with it. (Not before: a guard mustn't show them while they're being set up.)
+fn recording_ui_up(app: &AppHandle) {
+    let mut kept = kept_hidden();
+    kept.1 = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with("recframe-") || label.starts_with("pill-"))
+        .map(|(_, w)| w)
+        .collect();
+    if kept.0 > 0 {
+        for w in &kept.1 {
+            let _ = w.hide();
+        }
+    }
+}
+
+/// One hold on a recording's frame and pill (`clear_own_ui`): the last to drop shows them again. (A
 /// recording that ended meanwhile has destroyed them; showing those fails, harmlessly.)
 #[must_use = "dropping it shows the recording's frame and pill again: keep it until the grab is done"]
-pub struct Hidden(Vec<WebviewWindow>);
+pub struct Hidden(());
 
 impl Drop for Hidden {
     fn drop(&mut self) {
-        for w in &self.0 {
-            let _ = w.show();
+        let mut kept = kept_hidden();
+        kept.0 -= 1;
+        if kept.0 == 0 {
+            for w in &kept.1 {
+                let _ = w.show();
+            }
         }
     }
 }

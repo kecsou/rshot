@@ -96,7 +96,6 @@ pub fn start(app: &AppHandle, mode: &str) -> Result<(), String> {
     let state = app.state::<AppState>();
     let show_pointer = state.config.lock().unwrap().show_pointer;
     let frames = capture::grab_all(show_pointer)?;
-    drop(hidden);
     eprintln!(
         "rshot: grabbed {} monitor(s) in {} ms",
         frames.len(),
@@ -106,6 +105,9 @@ pub fn start(app: &AppHandle, mode: &str) -> Result<(), String> {
     let active = capture::frame_at(&frames, pos.x as i32, pos.y as i32);
     ui::place_overlays(app, &frames)?;
     let token = state.next_token.fetch_add(1, Ordering::Relaxed);
+    // Until the overlays hide (cancel, capture, record), a recording's frame and pill stay hidden.
+    // Handed over before the session exists, so whatever ends the session lets go of it.
+    ui::hide_recording_ui_while_overlay(hidden);
     *state.session.lock().unwrap() = Some(Session {
         token,
         mode: mode.into(),
@@ -368,6 +370,10 @@ fn record_from(
         Some(r) => {
             let [x, y, w, h] =
                 capture::clamp_rect(r.x, r.y, r.w, r.h, fw, fh).ok_or("empty selection")?;
+            // Rounded down to even for the encoder, a 1 px side would be none.
+            if w < 2 || h < 2 {
+                return Err("Selection too small to record".into());
+            }
             remember(app, &frame.name, r);
             Region {
                 x: frame.x + x as i32,
@@ -445,8 +451,15 @@ pub fn countdown_info(state: State<'_, AppState>) -> u8 {
     state.pending.lock().unwrap().as_ref().map_or(0, |p| p.secs)
 }
 
+/// On a blocking thread: it sleeps, grabs the screen or spawns ffmpeg.
 #[tauri::command]
 pub async fn countdown_done(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || after_countdown(app))
+        .await
+        .map_err(err)?
+}
+
+fn after_countdown(app: AppHandle) -> Result<(), String> {
     let rec = app.state::<AppState>().pending_rec.lock().unwrap().take();
     if let Some((region, full)) = rec {
         ui::close_prefix(&app, "countdown");
