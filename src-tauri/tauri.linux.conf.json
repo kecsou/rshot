@@ -1,5 +1,9 @@
 {
   "bundle": {
-    "externalBin": ["binaries/rshot-ffmpeg"]
+    "externalBin": ["binaries/rshot-ffmpeg"],
+    "resources": {
+      "../THIRD_PARTY.md": "THIRD_PARTY.md",
+      "binaries/FFMPEG-LICENSE.txt": "FFMPEG-LICENSE.txt"
+    }
   }
 }
