@@ -131,8 +131,13 @@ pub fn restore_and_save(c: &mut Config) -> Result<(), String> {
 /// uninstallers; `--keep-consent` (`release`) by installer upgrades.
 pub fn restore_from_cli(keep_consent: bool) -> Result<(), String> {
     // No config = rshot never ran for this user (prerm runs this for everyone logged in,
-    // gdm included): nothing to restore, and no config.toml to create.
+    // gdm included): nothing to restore, and no config.toml to create. On macOS it may also be a
+    // lost config.toml, whose backup lives on in rshot's own defaults (macos.rs): that goes back
+    // and is removed, still without saving a config.
     if !store::config_path().exists() {
+        #[cfg(target_os = "macos")]
+        return restore(&mut Config::default());
+        #[cfg(not(target_os = "macos"))]
         return Ok(());
     }
     let mut c = store::load_config();

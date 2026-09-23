@@ -837,7 +837,13 @@ pub fn stop(app: &AppHandle) -> Result<(), String> {
 /// `recover` turns into the MP4. On the main thread, so a stop under way (ENDING) isn't waited for.
 #[cfg(not(target_os = "linux"))]
 pub fn end_at_exit(app: &AppHandle) {
-    let rec = app.state::<AppState>().recording.lock().unwrap().take();
+    // Never panics: a panic in the exit callback would abort rshot before ffmpeg is stopped.
+    let rec = app
+        .state::<AppState>()
+        .recording
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
     if let Some(mut rec) = rec {
         end(&mut rec, Duration::from_secs(2));
     }

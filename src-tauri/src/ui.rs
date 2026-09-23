@@ -347,6 +347,11 @@ fn recording_icon() -> tauri::image::Image<'static> {
 /// Set while a Quit is saving the recording; that Quit carries on by itself afterwards.
 static QUITTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// Quit gave the OS its keys back, so the exit that follows needn't (main.rs `exiting`); a failed
+/// release leaves it unset, and the exit tries again.
+#[cfg(not(target_os = "linux"))]
+pub static RELEASED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Open editors are asked to close first (each prompts for unsaved changes); Quit exits once
 /// none is left, so after that a second Quit does. A recording is stopped and saved first, off the
 /// main thread (ffmpeg would otherwise outlive rshot and record until the disk is full), and a
@@ -394,8 +399,9 @@ fn quit(app: &AppHandle) {
         {
             let released =
                 crate::shortcuts::release(&app.state::<crate::AppState>().config.lock().unwrap());
-            if let Err(e) = released {
-                crate::pipeline::notify(app, &e);
+            match released {
+                Ok(()) => RELEASED.store(true, Ordering::Release),
+                Err(e) => crate::pipeline::notify(app, &e),
             }
         }
         return app.exit(0);

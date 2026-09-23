@@ -131,6 +131,13 @@ workflow artifacts. Then run the manual checklist in the design spec (§6) on ea
   - The shutter sound plays.
   - Signing out or restarting with **Launch at login** off, then pressing PrtScn: Windows' own behaviour (rshot gave
     the keys back as it exited). Signing out mid-recording: the next launch recovers the recording.
+  - AltGr combos in the editor's text box type their character (Polish AltGr+S/C/Z → ś/ć/ż) and don't run
+    Done/Copy/Undo.
+  - Upgrading with "Don't uninstall" while rshot runs: the installer closes rshot, PrtScn is Windows' own during the
+    install, and the next launch takes it again.
+  - Trimming a video while the trimmer is streaming it succeeds (the rename replaces a file the stream thread holds
+    open).
+  - The `.Recording_*` and `.trim.mp4` temp files show in Explorer (a leading dot hides nothing on Windows): cosmetic.
 - **macOS:**
   - The universal `.dmg` on Apple silicon and Intel; `xattr`; Screen Recording and Microphone prompts, and after an
     update.
@@ -161,8 +168,14 @@ workflow artifacts. Then run the manual checklist in the design spec (§6) on ea
   - Choosing **Not now** at onboarding still shows the Screen Recording step, and the first capture from the menu
     bar works once it's granted.
   - The microphone, saved by name, is still found after unplugging and replugging it.
+  - ⌘C with a selection in the editor's text box copies the text, and ⌘C/⌘V/⌘A work in text fields under the
+    Accessory policy.
+  - After turning the takeover off, `defaults read io.github.kecsou.rshot hotkeyBackup` says it doesn't exist.
   - Record with the bundled macOS ffmpeg and check that `strings Recording.mp4 | grep -m1 'x264 - core'` names the
     x264 commit `THIRD_PARTY.md` infers (`0480cb05`).
+- **Windows and macOS:**
+  - Quit from the tray with an unsaved editor hidden behind other apps brings the editor and its prompt to the front.
+  - With **Launch at login** on, rshot is running after signing in and has taken the keys.
 
 ### Before the first public release
 

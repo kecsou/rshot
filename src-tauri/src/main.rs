@@ -200,14 +200,15 @@ fn main() {
 }
 
 /// rshot's last word, after a Quit (`ui::quit`) or without one (macOS ⌘Q or logout, Windows
-/// shutdown or sign-out): the OS gets its screenshot keys back, and a recording's ffmpeg stops.
-/// The config comes from disk (no lock at exit); after a Quit, which released already, releasing
-/// again changes nothing. Linux has nothing to do: GNOME's bindings start rshot, and ffmpeg dies
-/// with it.
+/// shutdown or sign-out): the OS gets its screenshot keys back, unless Quit already gave them,
+/// and a recording's ffmpeg stops. The config comes from disk (no lock at exit). Linux has nothing
+/// to do: GNOME's bindings start rshot, and ffmpeg dies with it.
 fn exiting(app: &AppHandle) {
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = shortcuts::release(&store::load_config());
+        if !ui::RELEASED.load(std::sync::atomic::Ordering::Acquire) {
+            let _ = shortcuts::release(&store::load_config());
+        }
         recorder::end_at_exit(app);
     }
     let _ = app;
