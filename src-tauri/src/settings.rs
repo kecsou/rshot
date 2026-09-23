@@ -57,11 +57,11 @@ fn take_over_or_roll_back(c: &mut store::Config) -> Result<(), String> {
                 c.takeover = false;
                 Err(e)
             }
-            // A kept backup means GNOME's keys may still be cleared: stay "on" so turning it off retries.
+            // A kept backup means the system's keys may still be cleared: stay "on" so turning it off retries.
             Err(r) => {
                 c.takeover = c.gnome_backup.is_some();
                 Err(format!(
-                    "{e}; putting GNOME's shortcuts back also failed: {r}"
+                    "{e}; putting the system's shortcuts back also failed: {r}"
                 ))
             }
         },
@@ -69,7 +69,9 @@ fn take_over_or_roll_back(c: &mut store::Config) -> Result<(), String> {
 }
 
 /// Called at startup: a takeover saved by an older rshot also takes the keys added since (the
-/// record key), so a user who took over before them doesn't keep GNOME's recorder on it.
+/// record key), so a user who took over before them doesn't keep GNOME's recorder on it. On
+/// Windows it arms the keyboard hook again (the bindings live in-process). A failure switches the
+/// takeover off, as in Settings, and is returned.
 pub fn catch_up_takeover(c: &mut store::Config) -> Result<(), String> {
     if !shortcuts::outdated(c) {
         return Ok(());

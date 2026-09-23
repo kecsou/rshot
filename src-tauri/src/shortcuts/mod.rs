@@ -36,7 +36,13 @@ pub fn outdated(cfg: &Config) -> bool {
     gnome::outdated(cfg)
 }
 
-#[cfg(not(target_os = "linux"))]
+/// Windows keeps its bindings in this process: every launch takes a saved takeover again.
+#[cfg(target_os = "windows")]
+pub fn outdated(cfg: &Config) -> bool {
+    cfg.takeover
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub fn outdated(_cfg: &Config) -> bool {
     false
 }
@@ -82,23 +88,12 @@ pub fn pause(on: bool) {
     let _ = on;
 }
 
-/// Called once at startup. Windows keeps its bindings in-process, so a saved takeover is taken
-/// again. If that fails, it ends as a failed Settings takeover does: the OS gets its keys back and
-/// the toggle shows off (never on with nothing behind it); the caller shows the error. Linux:
-/// GNOME keeps the bindings, nothing to do.
-pub fn start(app: &tauri::AppHandle, cfg: &mut Config) -> Result<(), String> {
+/// Called once at startup, before `settings::catch_up_takeover` (which takes a saved takeover
+/// again where `outdated` says so): Windows installs its keyboard hook. Linux: nothing to do.
+pub fn start(app: &tauri::AppHandle) {
     #[cfg(target_os = "windows")]
-    {
-        windows::install_hook(app.clone());
-        if cfg.takeover {
-            return take_over(cfg).map_err(|e| match restore_and_save(cfg) {
-                Ok(()) => e,
-                Err(r) => format!("{e}; giving the shortcuts back also failed: {r}"),
-            });
-        }
-    }
-    let _ = (app, cfg);
-    Ok(())
+    windows::install_hook(app.clone());
+    let _ = app;
 }
 
 /// Gives the shortcuts back and records that in config.toml.

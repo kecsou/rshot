@@ -18,8 +18,7 @@ type Mods = [bool; 4];
 type Binding = (u32, Mods, Cmd);
 
 /// The combos rshot owns: the configured ones, then PrtScn → area (hard-wired while taken over).
-/// An empty shortcut is unbound. A bare key other than PrtScn is refused: the hook would take it
-/// from every app.
+/// An empty shortcut is unbound; one that isn't `combo::takeable` is refused.
 fn bindings(s: &Shortcuts) -> Result<Vec<Binding>, String> {
     let mut out = vec![];
     for (text, cmd) in [
@@ -33,13 +32,12 @@ fn bindings(s: &Shortcuts) -> Result<Vec<Binding>, String> {
         }
         let c = combo::parse(text)
             .ok_or_else(|| format!("\"{text}\" isn't a shortcut rshot can take."))?;
-        let mods = [c.ctrl, c.alt, c.shift, c.sup];
-        if mods == [false; 4] && c.key != combo::Key::Print {
+        if !combo::takeable(&c) {
             return Err(format!(
-                "\"{text}\" needs Ctrl, Alt, Shift or Super: alone, rshot would take that key from every app."
+                "\"{text}\" needs Ctrl, Alt or Super: without one, rshot would take that key from every app."
             ));
         }
-        out.push((combo::vk(c.key), mods, cmd));
+        out.push((combo::vk(c.key), [c.ctrl, c.alt, c.shift, c.sup], cmd));
     }
     out.push((combo::vk(combo::Key::Print), [false; 4], Cmd::CaptureArea));
     Ok(out)
@@ -58,9 +56,13 @@ struct Hook {
     enabled: bool,
     /// Settings is recording a new shortcut, so the keys must reach it.
     paused: bool,
-    /// Keys whose press rshot took, by virtual key.
-    held: [bool; 256],
+    /// Keys whose press rshot took, by virtual key: the time of their last event.
+    held: [Option<u32>; 256],
 }
+
+/// Longest gap between a press and its auto-repeat, or between two repeats, in ms: Windows'
+/// keyboard delay is at most 1 s. A longer one means the release got lost: a new press.
+const REPEAT_GAP_MS: u32 = 1200;
 
 impl Hook {
     const fn new() -> Self {
@@ -68,34 +70,40 @@ impl Hook {
             bindings: Vec::new(),
             enabled: false,
             paused: false,
-            held: [false; 256],
+            held: [None; 256],
         }
     }
 
-    /// One key event. A key whose press rshot took has its auto-repeats and its release
-    /// swallowed too, so a held PrtScn captures once and no app gets a release without a press.
-    // ponytail: a release Windows never delivers (e.g. the secure desktop took it) costs the
-    // key's next press, swallowed as a repeat; check GetAsyncKeyState(vk) if that shows up.
-    fn judge(&mut self, vk: u32, down: bool, mods: Mods) -> Verdict {
+    /// One key event at `time` (ms tick). A key whose press rshot took has its auto-repeats and
+    /// its release swallowed too, so a held PrtScn captures once and no app gets a release
+    /// without a press.
+    // ponytail: a release Windows never delivers (the secure desktop took it) makes a press of
+    // that key within REPEAT_GAP_MS of its last event count as a repeat: swallowed, not run.
+    // Upgrade: size the gap from SPI_GETKEYBOARDDELAY/SPI_GETKEYBOARDSPEED.
+    fn judge(&mut self, vk: u32, down: bool, mods: Mods, time: u32) -> Verdict {
         let Some(held) = self.held.get_mut(vk as usize) else {
             return Verdict::Pass;
         };
         if !down {
-            return if std::mem::take(held) {
+            return if held.take().is_some() {
                 Verdict::Swallow
             } else {
                 Verdict::Pass
             };
         }
-        if *held {
-            return Verdict::Swallow;
+        if let Some(last) = held {
+            if time.wrapping_sub(*last) <= REPEAT_GAP_MS {
+                *last = time;
+                return Verdict::Swallow;
+            }
         }
+        *held = None;
         if !self.enabled || self.paused {
             return Verdict::Pass;
         }
         match self.bindings.iter().find(|b| b.0 == vk && b.1 == mods) {
             Some(&(_, _, cmd)) => {
-                *held = true;
+                *held = Some(time);
                 Verdict::Run(cmd)
             }
             None => Verdict::Pass,
@@ -108,6 +116,16 @@ fn saved(v: Option<u32>) -> String {
     v.map(|v| v.to_string()).unwrap_or_default()
 }
 
+/// What the backup holds before rshot sets its 0: the value now, which is the user's choice (even
+/// one made after a Quit gave it back), unless it is 0 while a backup exists: rshot's own, left
+/// by this or a crashed session, so the backup stays.
+fn backup(kept: Option<&str>, now: Option<u32>) -> String {
+    match (kept, now) {
+        (Some(kept), Some(0)) => kept.to_string(),
+        _ => saved(now),
+    }
+}
+
 /// What a backup puts back: the number, or `None` to delete the value (Windows' default).
 fn original(saved: &str) -> Option<u32> {
     saved.parse().ok()
@@ -115,7 +133,7 @@ fn original(saved: &str) -> Option<u32> {
 
 #[cfg(target_os = "windows")]
 mod sys {
-    use super::{bindings, original, saved, Hook, Verdict, BACKUP_KEY};
+    use super::{backup, bindings, original, Hook, Verdict, BACKUP_KEY};
     use crate::{
         cli::Cmd,
         store::{self, Config},
@@ -215,13 +233,9 @@ mod sys {
                 "rshot couldn't install its keyboard hook, so it can't take the shortcuts.".into(),
             );
         }
-        // Backed up once: a later takeover must not save rshot's own 0 as the original.
-        if !cfg
-            .gnome_backup
-            .as_ref()
-            .is_some_and(|b| b.contains_key(BACKUP_KEY))
-        {
-            let v = saved(read_snipping()?);
+        let kept = cfg.gnome_backup.as_ref().and_then(|b| b.get(BACKUP_KEY));
+        let v = backup(kept.map(String::as_str), read_snipping()?);
+        if kept != Some(&v) {
             cfg.gnome_backup
                 .get_or_insert_with(Default::default)
                 .insert(BACKUP_KEY.into(), v);
@@ -298,7 +312,7 @@ mod sys {
                 is_down(VK_LWIN) || is_down(VK_RWIN),
             ];
             let down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
-            let verdict = hook_state().judge(kb.vkCode, down, mods);
+            let verdict = hook_state().judge(kb.vkCode, down, mods, kb.time);
             match verdict {
                 Verdict::Pass => {}
                 Verdict::Swallow => return LRESULT(1),
@@ -391,13 +405,20 @@ mod tests {
                 (PRINT, NONE, Cmd::CaptureArea),
             ]
         );
-        assert!(bindings(&shortcuts("Print", "", "", "")).is_ok());
+        assert!(bindings(&shortcuts("Print", "Shift+Print", "Ctrl+F9", "")).is_ok());
         let e = bindings(&shortcuts("Ctrl+Space", "", "", "")).unwrap_err();
         assert!(e.contains("\"Ctrl+Space\""), "{e}");
-        for bare in ["F12", "A", "4"] {
+        for bare in ["F12", "A", "4", "Shift+A", "Shift+F12"] {
             let e = bindings(&shortcuts("", "", bare, "")).unwrap_err();
             assert!(e.contains(&format!("\"{bare}\"")), "{e}");
         }
+    }
+
+    /// Events 30 ms apart, like a fast typist or an auto-repeat (one clock per test thread).
+    fn judge(h: &mut Hook, vk: u32, down: bool, mods: Mods) -> Verdict {
+        thread_local!(static CLOCK: std::cell::Cell<u32> = const { std::cell::Cell::new(0) });
+        let t = CLOCK.with(|c| c.replace(c.get() + 30));
+        h.judge(vk, down, mods, t)
     }
 
     fn on() -> Hook {
@@ -411,46 +432,107 @@ mod tests {
     #[test]
     fn a_taken_key_runs_once_and_its_repeats_and_release_are_swallowed() {
         let mut h = on();
-        assert_eq!(h.judge(PRINT, true, NONE), Verdict::Run(Cmd::CaptureArea));
-        assert_eq!(h.judge(PRINT, true, NONE), Verdict::Swallow); // auto-repeat
-        assert_eq!(h.judge(PRINT, true, NONE), Verdict::Swallow);
-        assert_eq!(h.judge(PRINT, false, NONE), Verdict::Swallow); // its release
-        assert_eq!(h.judge(PRINT, false, NONE), Verdict::Pass); // cleared
-        assert_eq!(h.judge(PRINT, true, NONE), Verdict::Run(Cmd::CaptureArea));
+        assert_eq!(
+            judge(&mut h, PRINT, true, NONE),
+            Verdict::Run(Cmd::CaptureArea)
+        );
+        assert_eq!(judge(&mut h, PRINT, true, NONE), Verdict::Swallow); // auto-repeat
+        assert_eq!(judge(&mut h, PRINT, true, NONE), Verdict::Swallow);
+        assert_eq!(judge(&mut h, PRINT, false, NONE), Verdict::Swallow); // its release
+        assert_eq!(judge(&mut h, PRINT, false, NONE), Verdict::Pass); // cleared
+        assert_eq!(
+            judge(&mut h, PRINT, true, NONE),
+            Verdict::Run(Cmd::CaptureArea)
+        );
     }
 
     #[test]
     fn modifiers_must_match_exactly() {
         let mut h = on();
-        assert_eq!(h.judge(S, true, WIN_SHIFT), Verdict::Run(Cmd::CaptureArea));
-        assert_eq!(h.judge(S, false, NONE), Verdict::Swallow); // Win/Shift let go first
-        assert_eq!(h.judge(S, true, [false, false, true, false]), Verdict::Pass);
-        assert_eq!(h.judge(S, false, NONE), Verdict::Pass);
-        assert_eq!(h.judge(S, true, [true, false, true, true]), Verdict::Pass);
         assert_eq!(
-            h.judge(PRINT, true, [false, true, false, false]),
+            judge(&mut h, S, true, WIN_SHIFT),
+            Verdict::Run(Cmd::CaptureArea)
+        );
+        assert_eq!(judge(&mut h, S, false, NONE), Verdict::Swallow); // Win/Shift let go first
+        assert_eq!(
+            judge(&mut h, S, true, [false, false, true, false]),
+            Verdict::Pass
+        );
+        assert_eq!(judge(&mut h, S, false, NONE), Verdict::Pass);
+        assert_eq!(
+            judge(&mut h, S, true, [true, false, true, true]),
+            Verdict::Pass
+        );
+        assert_eq!(
+            judge(&mut h, PRINT, true, [false, true, false, false]),
             Verdict::Run(Cmd::CaptureWindow)
         );
-        assert_eq!(h.judge(0x41, true, NONE), Verdict::Pass);
-        assert_eq!(h.judge(0x1_0000, true, NONE), Verdict::Pass); // out of range
+        assert_eq!(judge(&mut h, 0x41, true, NONE), Verdict::Pass);
+        assert_eq!(judge(&mut h, 0x1_0000, true, NONE), Verdict::Pass); // out of range
     }
 
     #[test]
     fn off_or_paused_passes_new_presses_but_finishes_a_taken_one() {
         let mut h = Hook::new();
         h.bindings = on().bindings;
-        assert_eq!(h.judge(PRINT, true, NONE), Verdict::Pass); // not taken over
-        assert_eq!(h.judge(PRINT, false, NONE), Verdict::Pass);
+        assert_eq!(judge(&mut h, PRINT, true, NONE), Verdict::Pass); // not taken over
+        assert_eq!(judge(&mut h, PRINT, false, NONE), Verdict::Pass);
         let mut h = on();
         h.paused = true; // Settings is recording a shortcut
-        assert_eq!(h.judge(S, true, WIN_SHIFT), Verdict::Pass);
-        assert_eq!(h.judge(S, false, WIN_SHIFT), Verdict::Pass);
+        assert_eq!(judge(&mut h, S, true, WIN_SHIFT), Verdict::Pass);
+        assert_eq!(judge(&mut h, S, false, WIN_SHIFT), Verdict::Pass);
         h.paused = false;
-        assert_eq!(h.judge(PRINT, true, NONE), Verdict::Run(Cmd::CaptureArea));
+        assert_eq!(
+            judge(&mut h, PRINT, true, NONE),
+            Verdict::Run(Cmd::CaptureArea)
+        );
         h.enabled = false; // released while PrtScn is held
-        assert_eq!(h.judge(PRINT, true, NONE), Verdict::Swallow);
-        assert_eq!(h.judge(PRINT, false, NONE), Verdict::Swallow);
-        assert_eq!(h.judge(PRINT, true, NONE), Verdict::Pass);
+        assert_eq!(judge(&mut h, PRINT, true, NONE), Verdict::Swallow);
+        assert_eq!(judge(&mut h, PRINT, false, NONE), Verdict::Swallow);
+        assert_eq!(judge(&mut h, PRINT, true, NONE), Verdict::Pass);
+    }
+
+    #[test]
+    fn a_press_long_after_the_last_event_is_new_not_a_repeat() {
+        let mut h = on();
+        assert_eq!(
+            h.judge(PRINT, true, NONE, 1_000),
+            Verdict::Run(Cmd::CaptureArea)
+        );
+        // Auto-repeat starts after the keyboard delay (up to 1 s), then comes faster.
+        assert_eq!(h.judge(PRINT, true, NONE, 2_000), Verdict::Swallow);
+        assert_eq!(h.judge(PRINT, true, NONE, 2_400), Verdict::Swallow);
+        // Its release never came (secure desktop): the next press, seconds later, runs.
+        assert_eq!(
+            h.judge(PRINT, true, NONE, 9_000),
+            Verdict::Run(Cmd::CaptureArea)
+        );
+        assert_eq!(h.judge(PRINT, true, NONE, 9_030), Verdict::Swallow);
+        // A stale "repeat" that doesn't match any more passes, and so does its release.
+        assert_eq!(
+            h.judge(PRINT, true, [true, false, false, false], 20_000),
+            Verdict::Pass
+        );
+        assert_eq!(h.judge(PRINT, false, NONE, 20_100), Verdict::Pass);
+        // The tick count wraps after 49.7 days.
+        assert_eq!(
+            h.judge(PRINT, true, NONE, u32::MAX - 10),
+            Verdict::Run(Cmd::CaptureArea)
+        );
+        assert_eq!(h.judge(PRINT, true, NONE, 20), Verdict::Swallow);
+    }
+
+    #[test]
+    fn the_backup_follows_the_users_value_but_never_takes_rshots_zero() {
+        assert_eq!(backup(None, None), ""); // first takeover, value unset
+        assert_eq!(backup(None, Some(1)), "1");
+        assert_eq!(backup(None, Some(0)), "0"); // the user's own 0
+        assert_eq!(backup(Some("1"), Some(0)), "1"); // rshot's 0 (still taken, or a crash)
+        assert_eq!(backup(Some(""), Some(0)), "");
+        // Changed by the user while rshot wasn't holding it (after a Quit): theirs now.
+        assert_eq!(backup(Some(""), Some(1)), "1");
+        assert_eq!(backup(Some("1"), None), "");
+        assert_eq!(backup(Some("0"), Some(1)), "1");
     }
 
     #[test]

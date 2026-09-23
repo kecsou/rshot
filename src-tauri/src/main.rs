@@ -156,16 +156,16 @@ fn main() {
             recorder::recording_discard,
             recorder::list_mics,
         ])
+        // A Settings page gone mid-rebind (closed, crashed) can't let go of the keys itself.
+        .on_window_event(|window, event| {
+            if window.label() == "settings" && matches!(event, tauri::WindowEvent::Destroyed) {
+                shortcuts::pause(false);
+            }
+        })
         .setup(move |app| {
             ui::create_tray(app.handle())?;
             ui::ensure_overlays(app.handle())?;
-            let started = shortcuts::start(
-                app.handle(),
-                &mut app.state::<AppState>().config.lock().unwrap(),
-            );
-            if let Err(e) = started {
-                pipeline::notify(app.handle(), &e);
-            }
+            shortcuts::start(app.handle());
             if !app.state::<AppState>().config.lock().unwrap().onboarded {
                 ui::open_onboarding(app.handle())?;
             }

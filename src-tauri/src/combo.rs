@@ -40,6 +40,12 @@ pub fn parse(s: &str) -> Option<Combo> {
     Some(c)
 }
 
+/// Whether rshot may take the combo system-wide: it needs Ctrl, Alt or Super (Shift alone would
+/// take capitals from every app), except PrtScn. Settings' recorder applies the same rule (keys.ts).
+pub fn takeable(c: &Combo) -> bool {
+    c.ctrl || c.alt || c.sup || c.key == Key::Print
+}
+
 fn parse_key(k: &str) -> Option<Key> {
     let mut chars = k.chars();
     match (chars.next(), chars.next()) {
@@ -106,6 +112,24 @@ mod tests {
         assert_eq!(parse("Ctrl+"), None);
         assert_eq!(parse("Hyper+X"), None);
         assert_eq!(parse("Ctrl+Space"), None);
+    }
+
+    #[test]
+    fn takeable_needs_ctrl_alt_or_super_unless_print() {
+        let t = |s: &str| takeable(&parse(s).unwrap());
+        for ok in [
+            "Print",
+            "Shift+Print",
+            "Ctrl+F9",
+            "Alt+A",
+            "Super+Shift+S",
+            "Ctrl+Shift+4",
+        ] {
+            assert!(t(ok), "{ok}");
+        }
+        for bad in ["F9", "A", "4", "Shift+A", "Shift+F12"] {
+            assert!(!t(bad), "{bad}");
+        }
     }
 
     #[test]

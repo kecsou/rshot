@@ -9,6 +9,7 @@ import { comboFrom } from './keys';
 mountIcons();
 let s = await ipc.getSettings();
 let rebinding: HTMLElement | null = null;
+void ipc.setRebinding(false); // a reload mid-rebind would leave rshot's keys let through
 const micSel = document.querySelector<HTMLSelectElement>('#mic')!;
 
 /** Starts recording a shortcut into `b`, or stops (null). Tells rshot only when that changes. */

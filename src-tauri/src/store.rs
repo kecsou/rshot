@@ -433,7 +433,8 @@ mod tests {
         let s = Shortcuts::default();
         let all = [&s.area, &s.screen, &s.window, &s.record];
         for k in all.iter().filter(|k| !k.is_empty()) {
-            assert!(crate::combo::parse(k).is_some(), "{k}");
+            let c = crate::combo::parse(k);
+            assert!(c.is_some_and(|c| crate::combo::takeable(&c)), "{k}");
         }
         #[cfg(target_os = "linux")]
         assert_eq!(
