@@ -182,12 +182,13 @@ describe('zoom and crop', () => {
     expect(M.cropFromDrag({ x: 10, y: 10 }, { x: 2000, y: 50 }, null, 100, 100)).toEqual({ x: 10, y: 10, w: 90, h: 40 });
   });
   it('usKey reads non-letter keys by their US-layout spot, never overriding a typed letter', () => {
-    expect(M.usKey({ key: 'à', code: 'Digit0' })).toBe('0'); // AZERTY Ctrl+0
-    expect(M.usKey({ key: '&', code: 'Digit1' })).toBe('1');
-    expect(M.usKey({ key: 'я', code: 'KeyZ' })).toBe('z'); // Cyrillic Ctrl+Z
-    expect(M.usKey({ key: ')', code: 'Minus' })).toBe('-');
-    expect(M.usKey({ key: 'q', code: 'KeyA' })).toBeUndefined(); // AZERTY Q stays Q
-    expect(M.usKey({ key: 'Enter', code: 'Enter' })).toBeUndefined();
+    expect(M.usKey({ key: 'à', code: 'Digit0', altKey: false })).toBe('0'); // AZERTY Ctrl+0
+    expect(M.usKey({ key: '&', code: 'Digit1', altKey: false })).toBe('1');
+    expect(M.usKey({ key: 'я', code: 'KeyZ', altKey: false })).toBe('z'); // Cyrillic Ctrl+Z
+    expect(M.usKey({ key: ')', code: 'Minus', altKey: false })).toBe('-');
+    expect(M.usKey({ key: 'q', code: 'KeyA', altKey: false })).toBeUndefined(); // AZERTY Q stays Q
+    expect(M.usKey({ key: 'Enter', code: 'Enter', altKey: false })).toBeUndefined();
+    expect(M.usKey({ key: 'ś', code: 'KeyS', altKey: true })).toBeUndefined(); // Polish AltGr+S (Ctrl+Alt on WebView2)
   });
   it('viewToImage undoes zoom and crop offset', () => {
     expect(M.viewToImage({ x: 50, y: 20 }, 0.5, { x: 100, y: 10, w: 1, h: 1 })).toEqual({ x: 200, y: 50 });

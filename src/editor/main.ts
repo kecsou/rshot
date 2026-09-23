@@ -409,6 +409,7 @@ texted.addEventListener('keydown', (e) => {
   if (e.isComposing) return; // Enter/Escape belong to the input method while it composes
   const k = [e.key.toLowerCase(), M.usKey(e)].find((x) => x === 's' || x === 'c');
   if ((e.ctrlKey || e.metaKey) && k) {
+    if (k === 'c' && texted.selectionStart !== texted.selectionEnd) return; // copies the selected text
     e.preventDefault();
     void (k === 's' ? done() : copy()); // both commit the text first
   } else if (e.key === 'Enter' && !e.shiftKey) {

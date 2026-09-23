@@ -90,6 +90,12 @@ fn quit(app: &AppHandle) {
         return app.exit(0);
     }
     for w in editors {
+        // Raised first, so an unsaved-changes prompt can't sit out of sight.
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        #[cfg(target_os = "linux")]
+        force_focus(&w);
         let _ = w.close(); // a close request, like the window's own close: the editor decides
     }
 }

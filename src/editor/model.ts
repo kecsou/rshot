@@ -226,9 +226,10 @@ export function cropFromDrag(a: Pt, b: Pt, ratio: number | null, W: number, H: n
 }
 
 /** Shortcut fallback for keys that don't type a Latin letter (AZERTY digit row, Cyrillic): what the
- *  key at that spot types on a US layout (`Digit0` → 0, `KeyZ` → z, `Equal` → =). A typed letter is kept as is. */
-export function usKey(e: { key: string; code: string }): string | undefined {
-  if (/^[a-z]$/i.test(e.key)) return undefined;
+ *  key at that spot types on a US layout (`Digit0` → 0, `KeyZ` → z, `Equal` → =). A typed letter is kept
+ *  as is, and so is anything typed with Alt: WebView2 reports AltGr as Ctrl+Alt, and AltGr+S is "ś". */
+export function usKey(e: { key: string; code: string; altKey: boolean }): string | undefined {
+  if (e.altKey || /^[a-z]$/i.test(e.key)) return undefined;
   return /^(?:Key|Digit)(.)$/.exec(e.code)?.[1].toLowerCase() ?? { Equal: '=', Minus: '-' }[e.code];
 }
 
