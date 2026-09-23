@@ -109,14 +109,13 @@ fn saved(v: Option<u32>) -> String {
 }
 
 /// What the backup holds before rshot sets its 0: the value now, which is the user's choice (even
-/// one made after a Quit gave it back), unless it is 0. A 0 while a backup exists is rshot's own,
-/// left by this or a crashed session, so the backup stays; a 0 with no backup may be rshot's too,
-/// its backup lost with config.toml, so it backs up Windows' default (no value): a dead PrtScn
-/// would be worse than the Snipping Tool.
+/// one made after a Quit gave it back), unless it is 0 while a backup exists: rshot's own, left by
+/// this or a crashed session, so the backup stays. A 0 with no backup is trusted too: users of
+/// ShareX or Greenshot turn Snipping off. Were it rshot's, its backup lost with config.toml, giving
+/// the keys back leaves PrtScn copying the screen, Windows' classic behaviour.
 fn backup(kept: Option<&str>, now: Option<u32>) -> String {
     match (kept, now) {
         (Some(kept), Some(0)) => kept.to_string(),
-        (None, Some(0)) => saved(None),
         _ => saved(now),
     }
 }
@@ -521,7 +520,7 @@ mod tests {
     fn the_backup_follows_the_users_value_but_never_takes_rshots_zero() {
         assert_eq!(backup(None, None), ""); // first takeover, value unset
         assert_eq!(backup(None, Some(1)), "1");
-        assert_eq!(backup(None, Some(0)), ""); // rshot's 0 whose backup was lost: the default
+        assert_eq!(backup(None, Some(0)), "0"); // off already (ShareX): the user's, kept off
         assert_eq!(backup(Some("1"), Some(0)), "1"); // rshot's 0 (still taken, or a crash)
         assert_eq!(backup(Some(""), Some(0)), "");
         // Changed by the user while rshot wasn't holding it (after a Quit): theirs now.

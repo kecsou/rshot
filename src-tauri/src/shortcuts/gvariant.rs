@@ -36,7 +36,9 @@ pub fn format_strv(v: &[String]) -> String {
     }
 }
 
-/// "Ctrl+Alt+Shift+R" → "<Ctrl><Alt><Shift>R" (GTK accelerator syntax).
+/// "Ctrl+Alt+Shift+R" → "<Ctrl><Alt><Shift>R" (GTK accelerator syntax). The key is any keysym
+/// ("Ctrl+Home"), but, as Settings records them (`combo::takeable`), it needs Ctrl, Alt or Super
+/// unless it is Print: a hand-edited "Shift+R" would take capitals from every app.
 pub fn to_gnome_accel(neutral: &str) -> Result<String, String> {
     let bad = || format!("unsupported shortcut {neutral:?}");
     let parts: Vec<&str> = neutral.split('+').collect();
@@ -53,6 +55,11 @@ pub fn to_gnome_accel(neutral: &str) -> Result<String, String> {
             "Super" => "<Super>",
             _ => return Err(bad()),
         });
+    }
+    if *key != "Print" && !mods.iter().any(|m| matches!(*m, "Ctrl" | "Alt" | "Super")) {
+        return Err(format!(
+            "{neutral:?} needs Ctrl, Alt or Super: without one, rshot would take that key from every app."
+        ));
     }
     Ok(out + key)
 }
@@ -113,6 +120,16 @@ mod tests {
             "<Ctrl><Alt><Shift>R"
         );
         assert_eq!(to_gnome_accel("Super+4").unwrap(), "<Super>4");
+        assert_eq!(to_gnome_accel("Ctrl+Home").unwrap(), "<Ctrl>Home"); // any keysym
+        assert_eq!(to_gnome_accel("Alt+F12").unwrap(), "<Alt>F12");
+    }
+
+    #[test]
+    fn rejects_keys_every_app_would_lose() {
+        for bare in ["R", "F12", "Home", "Shift+R", "Shift+F12"] {
+            let e = to_gnome_accel(bare).unwrap_err();
+            assert!(e.contains("needs Ctrl, Alt or Super"), "{bare:?}: {e}");
+        }
     }
 
     #[test]

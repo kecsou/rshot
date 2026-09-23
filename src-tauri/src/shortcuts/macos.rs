@@ -8,6 +8,7 @@ use crate::{
     combo::{self, Combo, Key},
     store::{Config, Shortcuts},
 };
+use std::collections::BTreeMap;
 
 #[cfg(target_os = "macos")]
 pub use sys::{init, pause, release, restore, take_over};
@@ -27,6 +28,31 @@ fn backup_key(id: u32) -> String {
     format!("mac:{id}")
 }
 
+/// rshot's own defaults domain (the bundle identifier), which keeps a copy of the backup under
+/// `COPY_KEY`: a lost config.toml mustn't leave ⌘⇧3/4/5 off for good.
+const OWN_DOMAIN: &str = "io.github.kecsou.rshot";
+const COPY_KEY: &str = "hotkeyBackup";
+
+/// The hotkey backups: config.toml's, or, when it has none (lost with it), the `copy` in rshot's
+/// own defaults.
+fn backups(
+    cfg: &Config,
+    copy: impl FnOnce() -> BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let own: BTreeMap<String, String> = cfg
+        .gnome_backup
+        .iter()
+        .flatten()
+        .filter(|(k, _)| k.starts_with("mac:"))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if own.is_empty() {
+        copy()
+    } else {
+        own
+    }
+}
+
 /// The value `defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add <id>` gets:
 /// the hotkey with the system's parameters, typed as System Settings writes them.
 fn entry(enabled: bool, (_, ascii, vk, mods): (u32, u32, u32, u32)) -> String {
@@ -37,37 +63,38 @@ fn entry(enabled: bool, (_, ascii, vk, mods): (u32, u32, u32, u32)) -> String {
     )
 }
 
-/// Whether hotkey `id` is on in the symbolic-hotkeys domain (`defaults export`, as JSON). No entry
-/// (never changed, or the domain unreadable) is macOS's default, on; the value may be a bool, a
-/// number or, written old-style by `defaults`, a string.
-fn is_enabled(domain: &serde_json::Value, id: u32) -> bool {
+/// Whether hotkey `id` is on, in the symbolic hotkeys (`AppleSymbolicHotKeys` as JSON); `None`
+/// when they couldn't be read. No entry (never changed) is macOS's default, on; the value may be a
+/// bool, a number or, written old-style by `defaults`, a string.
+fn is_enabled(hotkeys: &serde_json::Value, id: u32) -> Option<bool> {
     use serde_json::Value;
-    match &domain["AppleSymbolicHotKeys"][id.to_string()]["enabled"] {
+    if hotkeys.is_null() {
+        return None;
+    }
+    Some(match &hotkeys[id.to_string()]["enabled"] {
         Value::Bool(on) => *on,
         Value::Number(n) => n.as_i64() != Some(0),
         Value::String(s) => s != "0",
         _ => true,
-    }
+    })
 }
 
-/// What the backup holds before rshot switches the hotkey off: on ("1"), the user's choice when it
-/// is on now (even after a Quit gave it back), unless it is off while a backup exists: rshot's own
-/// off, left by this or a crashed session, so the backup stays. Off with no backup may be rshot's
-/// too, its backup lost with config.toml: on is the safe guess, a dead ⌘⇧3 being worse than the
-/// system's.
-fn backup(kept: Option<&str>, now_enabled: bool) -> String {
-    match kept {
-        Some(kept) if !now_enabled => kept.to_string(),
+/// What the backup holds before rshot switches the hotkey off: its state `now`, which is the
+/// user's choice (even one made after a Quit gave it back), unless it is off while a backup
+/// exists: rshot's own off, left by this or a crashed session, so the backup stays. Off with no
+/// backup is trusted too (a lost config.toml's backup comes from rshot's own defaults first,
+/// `backups`). Unreadable hotkeys keep the backup, or back up macOS's default, on.
+fn backup(kept: Option<&str>, now: Option<bool>) -> String {
+    match (kept, now) {
+        (Some(kept), None | Some(false)) => kept.to_string(),
+        (None, Some(false)) => "0".into(),
         _ => "1".into(),
     }
 }
 
 /// The hotkeys a release puts back, with their backed-up state: only those rshot backed up (so
 /// switched off); "0" stays off, anything else (even hand-edited junk) is macOS's default, on.
-fn originals(cfg: &Config) -> Vec<(u32, bool)> {
-    let Some(b) = &cfg.gnome_backup else {
-        return vec![];
-    };
+fn originals(b: &BTreeMap<String, String>) -> Vec<(u32, bool)> {
     SYSTEM
         .iter()
         .filter_map(|&(id, ..)| b.get(&backup_key(id)).map(|v| (id, v != "0")))
@@ -179,8 +206,8 @@ fn code_name(k: Key, layout: &[(&str, char)]) -> String {
 
 #[cfg(target_os = "macos")]
 mod sys {
-    use super::{backup, backup_key, bindings, code_name, entry, is_enabled, originals, KEYS};
-    use super::{Cmd, Combo, SYSTEM};
+    use super::{backup, backup_key, backups, bindings, code_name, entry, is_enabled, originals};
+    use super::{BTreeMap, Cmd, Combo, COPY_KEY, KEYS, OWN_DOMAIN, SYSTEM};
     use crate::{
         err, pipeline,
         store::{self, Config},
@@ -247,15 +274,22 @@ mod sys {
         }
     }
 
-    /// The symbolic-hotkeys domain as JSON, read through cfprefsd (the plist on disk can lag
-    /// behind it); `Null` when unreadable.
-    fn read_hotkeys() -> serde_json::Value {
-        const EXPORT: &str = "/usr/bin/defaults export com.apple.symbolichotkeys - \
-                              | /usr/bin/plutil -convert json -o - -";
-        run("/bin/sh", &["-c", EXPORT])
+    /// `key` of defaults `domain` as JSON, read through cfprefsd (the plist on disk can lag
+    /// behind it). Only that key is converted, so a `<data>` or `<date>` elsewhere in the domain
+    /// can't break it. `Null` when unreadable or absent.
+    fn read_json(domain: &str, key: &str) -> serde_json::Value {
+        let export = format!(
+            "/usr/bin/defaults export {domain} - | /usr/bin/plutil -extract {key} json -o - -"
+        );
+        run("/bin/sh", &["-c", &export])
             .ok()
             .and_then(|json| serde_json::from_str(&json).ok())
             .unwrap_or_default()
+    }
+
+    /// The copy of the backup in rshot's own defaults; empty when there is none.
+    fn read_copy() -> BTreeMap<String, String> {
+        serde_json::from_value(read_json(OWN_DOMAIN, COPY_KEY)).unwrap_or_default()
     }
 
     /// Writes the enabled bit of each listed hotkey, then makes the change live. Callers hold
@@ -287,28 +321,32 @@ mod sys {
         let wanted = bindings(&cfg.shortcuts)?;
         let app = APP.get().ok_or("rshot isn't running")?;
         let _writing = lock(&WRITING);
-        let now = read_hotkeys();
-        let kept = cfg.gnome_backup.get_or_insert_with(Default::default);
+        let now = read_json("com.apple.symbolichotkeys", "AppleSymbolicHotKeys");
+        let kept = backups(cfg, read_copy);
+        let b = cfg.gnome_backup.get_or_insert_with(Default::default);
         let mut changed = false;
         for (id, ..) in SYSTEM {
             let k = backup_key(id);
             let v = backup(kept.get(&k).map(String::as_str), is_enabled(&now, id));
-            if kept.get(&k) != Some(&v) {
-                kept.insert(k, v);
+            if b.get(&k) != Some(&v) {
+                b.insert(k, v);
                 changed = true;
             }
         }
+        let back = originals(b);
         if changed {
-            // The originals reach disk before the first change, so a crash can still restore them.
+            // The originals reach disk, twice, before the first change: a crash can still restore
+            // them, and so can a lost config.toml.
+            let mut copy = vec!["write", OWN_DOMAIN, COPY_KEY, "-dict"];
+            for (k, v) in b.iter().filter(|(k, _)| k.starts_with("mac:")) {
+                copy.extend([k.as_str(), v.as_str()]);
+            }
+            run("/usr/bin/defaults", &copy)?;
             store::save_config(cfg).map_err(|e| format!("saving shortcut backup: {e}"))?;
         }
         let gen = GEN.fetch_add(1, Ordering::SeqCst) + 1;
         set_system(&SYSTEM.map(|s| (s.0, false)))?;
-        *lock(&TAKEN) = Some(Taken {
-            gen,
-            wanted,
-            back: originals(cfg),
-        });
+        *lock(&TAKEN) = Some(Taken { gen, wanted, back });
         post_sync(app)
     }
 
@@ -322,11 +360,13 @@ mod sys {
             // Posting fails only once the event loop is gone, and the shortcuts with it.
             let _ = post_sync(app);
         }
-        set_system(&originals(cfg))
+        set_system(&originals(&backups(cfg, read_copy)))
     }
 
     pub fn restore(cfg: &mut Config) -> Result<(), String> {
         release(cfg)?;
+        // Fails when there is no copy, which is fine.
+        let _ = run("/usr/bin/defaults", &["delete", OWN_DOMAIN, COPY_KEY]);
         if let Some(b) = &mut cfg.gnome_backup {
             b.retain(|k, _| !k.starts_with("mac:"));
             if b.is_empty() {
@@ -601,51 +641,77 @@ mod tests {
 
     #[test]
     fn exported_hotkeys_read_as_on_unless_off() {
-        let domain: serde_json::Value = serde_json::from_str(
-            r#"{"AppleSymbolicHotKeys": {
+        let hotkeys: serde_json::Value = serde_json::from_str(
+            r#"{
                 "28": {"enabled": false, "value": {"parameters": [51, 20, 1179648], "type": "standard"}},
                 "29": {"enabled": true},
                 "30": {"enabled": 0},
                 "31": {"enabled": "0"},
                 "184": {"enabled": 1},
                 "64": {"enabled": false}
-            }}"#,
+            }"#,
         )
         .unwrap();
-        assert!(!is_enabled(&domain, 28));
-        assert!(is_enabled(&domain, 29));
-        assert!(!is_enabled(&domain, 30));
-        assert!(!is_enabled(&domain, 31)); // written old-style by `defaults`: a string
-        assert!(is_enabled(&domain, 184));
-        assert!(is_enabled(&domain, 60)); // no entry: never changed
-        assert!(is_enabled(&serde_json::Value::Null, 28)); // domain unreadable
+        assert_eq!(is_enabled(&hotkeys, 28), Some(false));
+        assert_eq!(is_enabled(&hotkeys, 29), Some(true));
+        assert_eq!(is_enabled(&hotkeys, 30), Some(false));
+        assert_eq!(is_enabled(&hotkeys, 31), Some(false)); // written old-style by `defaults`
+        assert_eq!(is_enabled(&hotkeys, 184), Some(true));
+        assert_eq!(is_enabled(&hotkeys, 60), Some(true)); // no entry: never changed
+        assert_eq!(is_enabled(&serde_json::Value::Null, 28), None); // unreadable
     }
 
     #[test]
-    fn the_backup_is_on_unless_rshots_off_already_has_one() {
-        assert_eq!(backup(None, true), "1"); // first takeover
-        assert_eq!(backup(Some("1"), false), "1"); // rshot's off (still taken, or a crash)
-        assert_eq!(backup(Some("0"), false), "0");
+    fn the_backup_follows_the_users_state_but_never_takes_rshots_off() {
+        assert_eq!(backup(None, Some(true)), "1"); // first takeover
+        assert_eq!(backup(None, Some(false)), "0"); // off already: the user's, kept off
+        assert_eq!(backup(Some("1"), Some(false)), "1"); // rshot's off (still taken, or a crash)
+        assert_eq!(backup(Some("0"), Some(false)), "0");
         // Changed by the user while rshot wasn't holding it (after a Quit): theirs now.
-        assert_eq!(backup(Some("0"), true), "1");
-        // Off with no backup: maybe rshot's own, its backup lost with config.toml: the default.
-        assert_eq!(backup(None, false), "1");
+        assert_eq!(backup(Some("0"), Some(true)), "1");
+        // Unreadable: a backup stays as it is (never a saved "0" turned "1"), or the default.
+        assert_eq!(backup(Some("0"), None), "0");
+        assert_eq!(backup(Some("1"), None), "1");
+        assert_eq!(backup(None, None), "1");
+    }
+
+    fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn a_lost_config_falls_back_to_the_copy_in_rshots_defaults() {
+        let copy = || map(&[("mac:28", "0"), ("mac:30", "1")]);
+        let mut cfg = Config::default();
+        assert_eq!(backups(&cfg, copy), copy()); // no config.toml backup
+        cfg.gnome_backup = Some(map(&[("win:X", "0")]));
+        assert_eq!(backups(&cfg, copy), copy()); // none of macOS's
+        cfg.gnome_backup = Some(map(&[("mac:28", "1"), ("win:X", "0")]));
+        assert_eq!(
+            backups(&cfg, || panic!("config.toml has one")),
+            map(&[("mac:28", "1")])
+        );
     }
 
     #[test]
     fn a_release_puts_back_only_what_was_backed_up() {
-        let mut cfg = Config::default();
-        assert_eq!(originals(&cfg), []);
-        cfg.gnome_backup = Some(
-            [
-                ("mac:28", "1"),
-                ("mac:29", "0"),
-                ("mac:184", "junk"),
-                ("win:X", "0"),
-            ]
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .into(),
-        );
-        assert_eq!(originals(&cfg), [(28, true), (29, false), (184, true)]);
+        assert_eq!(originals(&map(&[])), []);
+        let b = map(&[
+            ("mac:28", "1"),
+            ("mac:29", "0"),
+            ("mac:184", "junk"),
+            ("win:X", "0"),
+        ]);
+        assert_eq!(originals(&b), [(28, true), (29, false), (184, true)]);
+    }
+
+    #[test]
+    fn the_copy_lives_in_rshots_own_defaults_domain() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../../tauri.conf.json")).unwrap();
+        assert_eq!(conf["identifier"], OWN_DOMAIN);
     }
 }
