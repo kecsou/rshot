@@ -1,7 +1,9 @@
 import '../shared/base';
 import '../shared/glass.css';
+import '../shared/chrome.css';
 import './editor.css';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { ask, fail } from '../shared/ask';
 import { mountIcons } from '../shared/icons';
 import * as ipc from '../shared/ipc';
 import * as M from './model';
@@ -23,25 +25,6 @@ void getCurrentWindow().onCloseRequested(async (e) => {
   if (!ready) await ipc.closeWindow();
   else if ($('#modal').hidden) await requestClose(); // else a prompt is up: it gets answered first
 });
-
-// A prompt holds the keyboard: Tab cycles its buttons, Esc picks the safe one, Enter the focused one.
-addEventListener(
-  'keydown',
-  (e) => {
-    if ($('#modal').hidden) return;
-    e.stopPropagation();
-    const bs = [...$('#modal-acts').children] as HTMLElement[];
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      (bs.find((b) => b.classList.contains('b2') && !b.classList.contains('danger')) ?? bs[0]).click();
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      const i = bs.indexOf(document.activeElement as HTMLElement);
-      bs[i < 0 ? 0 : (i + (e.shiftKey ? bs.length - 1 : 1)) % bs.length].focus();
-    }
-  },
-  true,
-);
 
 /** Startup failed: say why, then close (nothing to edit). */
 async function fatal(name: string, e: unknown): Promise<never> {
@@ -489,31 +472,6 @@ $('#crop-apply').addEventListener('click', () => exitCrop(true));
 $('#crop-cancel').addEventListener('click', () => exitCrop(false));
 
 // ---------- save / copy / close / delete ----------
-
-function ask(text: string, buttons: { label: string; value: string; primary?: boolean; danger?: boolean }[]): Promise<string> {
-  return new Promise((resolve) => {
-    $('#modal-text').textContent = text;
-    const acts = $('#modal-acts');
-    acts.replaceChildren(
-      ...buttons.map((b) => {
-        const el = document.createElement('button');
-        el.className = b.primary ? 'b1' : 'b2';
-        if (b.danger) el.classList.add('danger');
-        el.textContent = b.label;
-        el.onclick = () => {
-          $('#modal').hidden = true;
-          resolve(b.value);
-        };
-        return el;
-      }),
-    );
-    $('#modal').hidden = false;
-    // Enter picks the safe choice: Cancel on a destructive prompt, else the primary action.
-    (acts.querySelector<HTMLElement>('.b1:not(.danger)') ?? (acts.firstElementChild as HTMLElement | null))?.focus();
-  });
-}
-
-const fail = (what: string, e: unknown) => ask(`${what}: ${e}`, [{ label: 'OK', value: 'ok', primary: true }]);
 
 /** True when what's on screen is now on disk (an edit made during the write stays unsaved). */
 async function save(): Promise<boolean> {

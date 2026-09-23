@@ -1,16 +1,3 @@
-html, body { height: 100%; overflow: hidden; }
-.ed { position: relative; height: 100%; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: var(--surface); border: 1px solid #34343a; }
-header { height: 48px; flex-shrink: 0; background: var(--surface-2); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 10px 0 16px; gap: 8px; }
-.title { font: 600 13px Inter; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meta { font: 500 11.5px Inter; color: var(--text-3); margin-left: 8px; white-space: nowrap; }
-.sp { flex: 1; align-self: stretch; }
-.ib { width: 32px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: #d9d9e0; }
-.ib:hover { background: rgba(255, 255, 255, 0.1); }
-.ib:disabled { color: rgba(255, 255, 255, 0.3); background: none; }
-.vsep { width: 1px; height: 20px; background: rgba(255, 255, 255, 0.12); margin: 0 4px; }
-.wx { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.1); margin-left: 8px; }
-.wx .ic { width: 12px; height: 12px; }
-
 .body { flex: 1; position: relative; min-height: 0; }
 .stage { position: absolute; inset: 0; overflow: auto; display: grid; place-items: center; padding: 30px 30px 30px 90px; background: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1.2px) 0 0 / 18px 18px, var(--surface); }
 #view { display: block; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 24px 60px rgba(0, 0, 0, 0.55); border-radius: 3px; cursor: crosshair; touch-action: none; }
@@ -47,12 +34,7 @@ body[data-tool='text'] #view { cursor: text; }
 #cropbar .seg button { padding: 4px 8px; }
 
 footer { height: 40px; flex-shrink: 0; background: var(--surface-2); border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 12px; font: 500 11.5px Inter; }
-.chip { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px 0 8px; border-radius: 7px; background: rgba(255, 255, 255, 0.06); min-width: 0; max-width: 60%; }
-.chip .ok { width: 15px; height: 15px; border-radius: 50%; background: var(--ok); display: grid; place-items: center; color: #063; flex-shrink: 0; }
-.chip .ok .ic { width: 9px; height: 9px; stroke-width: 3.2; }
-.chip .p { color: rgba(255, 255, 255, 0.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chip .cp { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: rgba(255, 255, 255, 0.7); flex-shrink: 0; }
-.chip .cp .ic { width: 14px; height: 14px; }
+.chip { max-width: 60%; }
 .zoom { display: flex; align-items: center; gap: 2px; color: rgba(255, 255, 255, 0.8); }
 .zoom .ib { width: 26px; height: 24px; }
 .zoom .ib .ic { width: 14px; height: 14px; }
@@ -60,8 +42,3 @@ footer { height: 40px; flex-shrink: 0; background: var(--surface-2); border-top:
 #fit { height: 24px; margin-left: 6px; font-weight: 500; }
 .dirty { color: var(--text-3); margin-right: 12px; }
 .dirty i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ff9f0a; margin-right: 6px; vertical-align: 1px; }
-
-#modal { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(0, 0, 0, 0.45); }
-#modal .box { width: 360px; padding: 20px; border-radius: 14px; font: 500 13px Inter; line-height: 1.5; }
-#modal .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.danger { background: var(--danger) !important; color: #fff; }

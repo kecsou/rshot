@@ -1,0 +1,23 @@
+/* Editor window chrome shared by the image and video editors: frame, header, path chip, prompt. */
+html, body { height: 100%; overflow: hidden; }
+.ed { position: relative; height: 100%; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: var(--surface); border: 1px solid #34343a; }
+header { height: 48px; flex-shrink: 0; background: var(--surface-2); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 10px 0 16px; gap: 8px; }
+.title { font: 600 13px Inter; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { font: 500 11.5px Inter; color: var(--text-3); margin-left: 8px; white-space: nowrap; }
+.sp { flex: 1; align-self: stretch; }
+.ib { width: 32px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: #d9d9e0; }
+.ib:hover { background: rgba(255, 255, 255, 0.1); }
+.ib:disabled { color: rgba(255, 255, 255, 0.3); background: none; }
+.vsep { width: 1px; height: 20px; background: rgba(255, 255, 255, 0.12); margin: 0 4px; }
+.wx { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.1); margin-left: 8px; }
+.wx .ic { width: 12px; height: 12px; }
+.chip { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 6px 0 8px; border-radius: 7px; background: rgba(255, 255, 255, 0.06); min-width: 0; }
+.chip .ok { width: 15px; height: 15px; border-radius: 50%; background: var(--ok); display: grid; place-items: center; color: #063; flex-shrink: 0; }
+.chip .ok .ic { width: 9px; height: 9px; stroke-width: 3.2; }
+.chip .p { color: rgba(255, 255, 255, 0.75); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip .cp { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: rgba(255, 255, 255, 0.7); flex-shrink: 0; }
+.chip .cp .ic { width: 14px; height: 14px; }
+#modal { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(0, 0, 0, 0.45); }
+#modal .box { width: 360px; padding: 20px; border-radius: 14px; font: 500 13px Inter; line-height: 1.5; }
+#modal .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.danger { background: var(--danger) !important; color: #fff; }
