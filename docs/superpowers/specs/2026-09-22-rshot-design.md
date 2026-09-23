@@ -232,7 +232,7 @@ magnifier can read pixel colours.
 ### 3.7 Packaging and distribution
 | Target | Artefacts | Notes |
 |---|---|---|
-| Linux | `.deb` (Depends only on libraries present on stock Ubuntu desktops: libwebkit2gtk-4.1-0, libayatana-appindicator3-1, libpipewire, libgbm1; ffmpeg is bundled), `.rpm`, AppImage | built on ubuntu-22.04 for glibc reach; `prerm` restores shortcuts best-effort for logged-in users (per-user `gsettings` through their session bus) |
+| Linux | `.deb` (Depends only on libraries present on stock Ubuntu desktops: libwebkit2gtk-4.1-0, libayatana-appindicator3-1, libpipewire, libgbm1; ffmpeg is bundled), `.rpm`, AppImage | built on ubuntu-24.04 (PipeWire ≥ 1.0 headers needed by the capture crate; packages need glibc 2.39); `prerm` restores shortcuts best-effort for logged-in users (per-user `gsettings` through their session bus) |
 | Windows | NSIS `.exe`, per-user install | ffmpeg sidecar; the uninstall hook runs `rshot restore-shortcuts`; WebView2 bootstrapper |
 | macOS | `.dmg`, universal binary | ffmpeg sidecar (per-arch static builds lipo'd); unsigned until the owner provides certificates; README documents the restore command, since drag-to-Trash runs no hook |
 

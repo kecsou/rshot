@@ -11,6 +11,7 @@ Download the installer for your system from the GitHub release:
 - **Ubuntu/Debian:** `sudo apt install ./rshot_<v>_amd64.deb`.
 - **Fedora:** `sudo dnf install ./rshot-<v>-1.x86_64.rpm`.
 - **Other Linux:** `chmod +x rshot_<v>_amd64.AppImage && ./rshot_<v>_amd64.AppImage`.
+- The Linux packages need glibc 2.39: Ubuntu 24.04 or later, or a distro of the same age.
 - **Windows:** run `rshot_<v>_x64-setup.exe` (per-user, no admin). SmartScreen may warn because the build is
   unsigned: **More info → Run anyway**.
 - **macOS:** open `rshot_<v>_universal.dmg` (one app for Apple silicon and Intel), drag rshot to Applications,
@@ -82,6 +83,8 @@ Automatic takeover works on GNOME. Elsewhere, bind `rshot capture area|screen|wi
 - The pointer can be included in screenshots on Linux only (recordings always show it).
 - macOS and Windows builds are unsigned (the macOS app has an ad-hoc signature only).
 - GNOME/KDE on Wayland aren't supported yet.
+- The `.deb`, `.rpm` and AppImage need glibc 2.39 (Ubuntu 24.04+, or a distro of the same age). They're built on
+  Ubuntu 24.04 because the screen-capture library's PipeWire bindings need PipeWire ≥ 1.0 headers at build time.
 - On macOS, uninstalling by dragging to the Trash doesn't restore ⌘⇧3/4/5, so first quit rshot and run
   `/Applications/rshot.app/Contents/MacOS/rshot restore-shortcuts` (see above).
 - macOS: giving the keys back re-enables ⌘⇧3/4/5 with their default keys, so a remap you had made of those
@@ -107,7 +110,7 @@ Automatic takeover works on GNOME. Elsewhere, bind `rshot capture area|screen|wi
 
 The Windows and macOS builds are compiled and packaged by CI but were never run by the implementer. First, before the
 first `v*` tag, run `release.yml` once from the Actions tab (`workflow_dispatch`): it exercises the NSIS hook, `lipo`
-and the `.dmg`, the Git Bash tools (`unzip`, `shasum`) and the AppImage on Ubuntu 22.04, and returns the installers as
+and the `.dmg`, the Git Bash tools (`unzip`, `shasum`) and the AppImage on Ubuntu 24.04, and returns the installers as
 workflow artifacts. Then run the manual checklist in the design spec (§6) on each OS, plus:
 
 - **Windows:**

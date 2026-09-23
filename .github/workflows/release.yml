@@ -48,8 +48,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # 22.04: the oldest glibc the .deb/.rpm/AppImage should run on.
-          - os: ubuntu-22.04
+          # 24.04: libspa (xcap -> pipewire) needs PipeWire >= 1.0 headers, so the .deb/.rpm/AppImage need glibc 2.39.
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -87,6 +87,7 @@ jobs:
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPIMAGE_EXTRACT_AND_RUN: 1  # linuxdeploy runs without FUSE 2 (libfuse2t64)
         with:
           args: --target ${{ matrix.target }}
           releaseId: ${{ needs.create-release.outputs.id }}
