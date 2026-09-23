@@ -304,7 +304,7 @@ fn capture_from(
             target,
             secs,
         });
-        return ui::show_countdown(app, center).inspect_err(|_| {
+        return ui::show_countdown(app, center, (frame.x, frame.y)).inspect_err(|_| {
             app.state::<AppState>().pending.lock().unwrap().take();
             ui::close_prefix(app, "countdown");
         });
@@ -387,6 +387,8 @@ fn record_from(
                 screen: index,
                 lx: x,
                 ly: y,
+                fw,
+                fh,
             }
         }
         None => Region {
@@ -397,6 +399,8 @@ fn record_from(
             screen: index,
             lx: 0,
             ly: 0,
+            fw,
+            fh,
         },
     };
     *app.state::<AppState>().pending_rec.lock().unwrap() = Some((region, rect.is_none()));
@@ -406,6 +410,7 @@ fn record_from(
             region.x + region.w as i32 / 2,
             region.y + region.h as i32 / 2,
         ),
+        (frame.x, frame.y),
     )
 }
 

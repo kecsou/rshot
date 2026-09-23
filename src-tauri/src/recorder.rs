@@ -17,9 +17,9 @@ use tauri::{AppHandle, Manager, State};
 
 /// A recorded area. `x`/`y`/`w`/`h` are physical desktop pixels (macOS: the monitor's origin in
 /// points × its scale, plus image pixels). `screen` is its monitor's index in `Monitor::all()`
-/// order, and `lx`/`ly` its top-left in that monitor's image pixels. avfoundation crops with
-/// `lx`/`ly`/`w`/`h` as they are: its "Capture screen N" frames have the display's backing pixel
-/// size, which is the size of xcap's image of that monitor (both enumerate `CGGetActiveDisplayList`).
+/// order, `lx`/`ly` its top-left in that monitor's image pixels, and `fw`/`fh` the size of that
+/// image. avfoundation crops in proportion to `fw`/`fh`, so the cut is right whether its
+/// "Capture screen N" frames come in pixels or in points.
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Region {
     pub x: i32,
@@ -29,6 +29,8 @@ pub struct Region {
     pub screen: usize,
     pub lx: u32,
     pub ly: u32,
+    pub fw: u32,
+    pub fh: u32,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -231,13 +233,14 @@ pub fn gdigrab_args(r: Region, fps: u8, mic: Option<&str>, out: &Path) -> Vec<St
     a
 }
 
-/// macOS: avfoundation video device `screen_dev` (a "Capture screen N"), with audio device
-/// `audio_dev` (its index), cropped to `(x, y, w, h)` in that screen's pixels (`Region`).
+/// macOS: avfoundation video device `screen_dev` (a "Capture screen N") and audio device
+/// `audio_dev`, both by index (a name would be prefix-matched, and one starting with a digit read
+/// as an index), cropped to `crop`'s area (`lx`/`ly`/`w`/`h` of its `fw`×`fh` monitor image).
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn avfoundation_args(
     screen_dev: usize,
-    audio_dev: Option<&str>,
-    crop: Option<(u32, u32, u32, u32)>,
+    audio_dev: Option<usize>,
+    crop: Option<Region>,
     fps: u8,
     out: &Path,
 ) -> Vec<String> {
@@ -252,25 +255,33 @@ pub fn avfoundation_args(
         "-framerate",
     ]);
     a.push(fps.to_string());
-    a.push("-i".into());
-    a.push(format!("{screen_dev}:{}", audio_dev.unwrap_or("none")));
-    if let Some((x, y, w, h)) = crop {
+    // A format the screen delivers: the default (yuv420p) is refused, with an error each time.
+    a.extend(strs(&["-pixel_format", "uyvy422", "-i"]));
+    let audio = audio_dev.map_or_else(|| "none".into(), |d| d.to_string());
+    a.push(format!("{screen_dev}:{audio}"));
+    if let Some(r) = crop {
+        // In proportion to the monitor's image (`iw`×`ih` may be its pixels or its points), the
+        // size rounded down to even.
+        let (w, h, x, y, fw, fh) = (r.w, r.h, r.lx, r.ly, r.fw, r.fh);
         a.push("-vf".into());
-        a.push(format!("crop={}:{}:{x}:{y}", even(w), even(h)));
+        a.push(format!(
+            "crop=trunc(iw*{w}/{fw}/2)*2:trunc(ih*{h}/{fh}/2)*2:trunc(iw*{x}/{fw}):trunc(ih*{y}/{fh})"
+        ));
     }
     a.extend(encode_tail(audio_dev.is_some(), out));
     a
 }
 
 /// The audio devices in `ffmpeg -list_devices true -f dshow -i dummy`'s stderr, by name (the id
-/// `-i audio=<name>` takes).
+/// `-i audio=<name>` takes): `"<name>" (<types>)` lines whose types include audio, e.g.
+/// `(audio)` or `(video, audio)`.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub fn parse_dshow_audio(out: &str) -> Vec<Mic> {
     out.lines()
-        .filter(|l| l.trim_end().ends_with("(audio)"))
         .filter_map(|l| {
-            let name = l.split_once('"')?.1.split_once('"')?.0;
-            Some(Mic {
+            let (name, types) = l.split_once('"')?.1.split_once('"')?;
+            let types = types.trim().strip_prefix('(')?.strip_suffix(')')?;
+            types.split(',').any(|t| t.trim() == "audio").then(|| Mic {
                 id: name.into(),
                 label: name.into(),
             })
@@ -278,10 +289,13 @@ pub fn parse_dshow_audio(out: &str) -> Vec<Mic> {
         .collect()
 }
 
+/// An avfoundation device: (index, name).
+type Device = (usize, String);
+
 /// `ffmpeg -f avfoundation -list_devices true -i ""`'s stderr → the screens as (N of "Capture
-/// screen N", its video device index), and the audio devices (id: their index).
+/// screen N", its video device index), and the audio devices.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-pub fn parse_avfoundation(out: &str) -> (Vec<(usize, usize)>, Vec<Mic>) {
+pub fn parse_avfoundation(out: &str) -> (Vec<(usize, usize)>, Vec<Device>) {
     let (mut screens, mut mics, mut audio) = (vec![], vec![], false);
     for line in out.lines() {
         if line.contains("audio devices:") {
@@ -298,15 +312,23 @@ pub fn parse_avfoundation(out: &str) -> (Vec<(usize, usize)>, Vec<Mic>) {
             continue;
         };
         if audio {
-            mics.push(Mic {
-                id: idx.to_string(),
-                label: name.trim().into(),
-            });
+            mics.push((idx, name.trim().to_string()));
         } else if let Some(Ok(n)) = name.trim().strip_prefix("Capture screen ").map(str::parse) {
             screens.push((n, idx));
         }
     }
     (screens, mics)
+}
+
+/// The index of the mic named `name` (exactly) among the audio `devices`. macOS keeps the mic by
+/// name, as indexes shift when devices come and go.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn audio_index(devices: &[Device], name: &str) -> Result<usize, String> {
+    devices
+        .iter()
+        .find(|(_, n)| n == name)
+        .map(|(i, _)| *i)
+        .ok_or_else(|| format!("The microphone “{name}” isn't connected."))
 }
 
 /// ffmpeg's device list on macOS (on stderr; ffmpeg then fails, as there's no input).
@@ -348,14 +370,20 @@ pub fn record_args(
         let mut cmd = ffmpeg_command(ffmpeg);
         cmd.args(AVFOUNDATION_LIST);
         let list = output_within(cmd, Duration::from_secs(5))?;
-        let (screens, _) = parse_avfoundation(&String::from_utf8_lossy(&list.stderr));
+        let (screens, mics) = parse_avfoundation(&String::from_utf8_lossy(&list.stderr));
         let dev = screens
             .iter()
             .find(|(n, _)| *n == r.screen)
             .map(|(_, d)| *d)
             .ok_or("ffmpeg doesn't list this screen for recording")?;
-        let crop = (!full).then_some((r.lx, r.ly, r.w, r.h));
-        Ok(avfoundation_args(dev, mic, crop, fps, out))
+        let audio = mic.map(|name| audio_index(&mics, name)).transpose()?;
+        Ok(avfoundation_args(
+            dev,
+            audio,
+            (!full).then_some(r),
+            fps,
+            out,
+        ))
     }
 }
 
@@ -654,37 +682,48 @@ fn spawn_tied(mut cmd: Command, level: Option<Arc<AtomicU32>>) -> Result<Child, 
 }
 
 /// Windows: puts `child` in rshot's job, which kills its processes once its only handle (never
-/// closed, so it closes as rshot exits) goes.
+/// closed, so it closes as rshot exits) goes. Fails, like a failed spawn, when it can't.
 #[cfg(windows)]
 fn kill_with_rshot(child: &Child) -> Result<(), String> {
     use std::os::windows::io::AsRawHandle;
     use windows::Win32::{
-        Foundation::HANDLE,
+        Foundation::{CloseHandle, HANDLE},
         System::JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
             SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
             JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
         },
     };
-    // The handle as an integer: a raw pointer isn't Sync, so it can't sit in a static.
-    static JOB: std::sync::OnceLock<Result<isize, String>> = std::sync::OnceLock::new();
-    let job = JOB.get_or_init(|| {
-        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        // SAFETY: a fresh unnamed job; `limits` outlives the call, which reads its exact size.
-        unsafe {
-            let job = CreateJobObjectW(None, windows::core::PCWSTR::null()).map_err(err)?;
-            SetInformationJobObject(
-                job,
-                JobObjectExtendedLimitInformation,
-                std::ptr::from_ref(&limits).cast(),
-                std::mem::size_of_val(&limits) as u32,
-            )
-            .map_err(err)?;
-            Ok(job.0 as isize)
+    // Made on first use and kept once it works (a failure is retried by the next recording).
+    // The handle as an integer: a raw pointer isn't Send, so it can't sit in a static.
+    static JOB: std::sync::Mutex<Option<isize>> = std::sync::Mutex::new(None);
+    let mut kept = JOB
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let job = match *kept {
+        Some(job) => HANDLE(job as *mut std::ffi::c_void),
+        None => {
+            let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            // SAFETY: a fresh unnamed job; `limits` outlives the call, which reads its exact size.
+            // A job that can't take the limit is closed, not kept.
+            unsafe {
+                let job = CreateJobObjectW(None, windows::core::PCWSTR::null()).map_err(err)?;
+                SetInformationJobObject(
+                    job,
+                    JobObjectExtendedLimitInformation,
+                    std::ptr::from_ref(&limits).cast(),
+                    std::mem::size_of_val(&limits) as u32,
+                )
+                .inspect_err(|_| {
+                    let _ = CloseHandle(job);
+                })
+                .map_err(err)?;
+                *kept = Some(job.0 as isize);
+                job
+            }
         }
-    });
-    let job = HANDLE(job.clone()? as *mut std::ffi::c_void);
+    };
     // SAFETY: both handles are open: the job's for rshot's lifetime, the child's while `child` is.
     unsafe { AssignProcessToJobObject(job, HANDLE(child.as_raw_handle())) }.map_err(err)
 }
@@ -940,7 +979,14 @@ pub async fn list_mics() -> Vec<Mic> {
         }
         #[cfg(target_os = "macos")]
         {
-            parse_avfoundation(&String::from_utf8_lossy(&o.stderr)).1
+            parse_avfoundation(&String::from_utf8_lossy(&o.stderr))
+                .1
+                .into_iter()
+                .map(|(_, name)| Mic {
+                    id: name.clone(),
+                    label: name,
+                })
+                .collect()
         }
     })
     .await
@@ -989,6 +1035,8 @@ mod tests {
             screen: 0,
             lx: 0,
             ly: 0,
+            fw: 0,
+            fh: 0,
         };
         let a = x11grab_args(r, ":1", 30, None, Path::new("/v/.R.mkv"));
         assert_eq!(
@@ -1105,6 +1153,8 @@ mod tests {
             screen: 0,
             lx: 0,
             ly: 0,
+            fw: 0,
+            fh: 0,
         };
         let a = gdigrab_args(
             r,
@@ -1136,15 +1186,11 @@ mod tests {
                 label: "Microphone (Realtek(R) Audio)".into()
             }]
         );
-        // ffmpeg 7+ tags the lines with the input instead, and ends with an error (no input given).
-        let newer = "[in#0 @ 0000021a] \"Mikrofon (USB Audio)\" (audio)\r\n[in#0 @ 0000021a]   Alternative name \"@device_cm_{33D9}\"\r\n[in#0 @ 0000021a] Error opening input: Immediate exit requested\r\n";
-        assert_eq!(
-            parse_dshow_audio(newer),
-            vec![Mic {
-                id: "Mikrofon (USB Audio)".into(),
-                label: "Mikrofon (USB Audio)".into()
-            }]
-        );
+        // CRLF line ends; a device with several pin types (a capture card) lists them all; the
+        // listing ends with ffmpeg's error for the input it then refuses to open.
+        let more = "[dshow @ 0000021a] \"HD60 S+\" (video, audio)\r\n[dshow @ 0000021a] \"Mikrofon (USB Audio)\" (audio)\r\n[dshow @ 0000021a]   Alternative name \"@device_cm_{33D9}\"\r\n[dshow @ 0000021a] \"OBS Virtual Camera\" (video)\r\n[in#0 @ 0000021b] Error opening input: Immediate exit requested\r\n";
+        let names: Vec<String> = parse_dshow_audio(more).into_iter().map(|m| m.id).collect();
+        assert_eq!(names, s(&["HD60 S+", "Mikrofon (USB Audio)"]));
     }
 
     #[test]
@@ -1152,12 +1198,17 @@ mod tests {
         let out = "[AVFoundation indev @ 0x1] AVFoundation video devices:\n[AVFoundation indev @ 0x1] [0] FaceTime HD Camera\n[AVFoundation indev @ 0x1] [1] Capture screen 0\n[AVFoundation indev @ 0x1] [2] Capture screen 1\n[AVFoundation indev @ 0x1] AVFoundation audio devices:\n[AVFoundation indev @ 0x1] [0] MacBook Pro Microphone\n";
         let (screens, mics) = parse_avfoundation(out);
         assert_eq!(screens, vec![(0, 1), (1, 2)]);
+        assert_eq!(mics, vec![(0, "MacBook Pro Microphone".to_string())]);
+        // The saved name → today's index; exact, never a prefix; a missing one is an error.
+        let devices = [
+            (0, "MacBook Pro Microphone".to_string()),
+            (1, "MacBook".to_string()),
+        ];
+        assert_eq!(audio_index(&devices, "MacBook"), Ok(1));
+        assert_eq!(audio_index(&devices, "MacBook Pro Microphone"), Ok(0));
         assert_eq!(
-            mics,
-            vec![Mic {
-                id: "0".into(),
-                label: "MacBook Pro Microphone".into()
-            }]
+            audio_index(&devices, "USB Mic"),
+            Err("The microphone “USB Mic” isn't connected.".to_string())
         );
         assert_eq!(
             parse_avfoundation("[in#0 @ 0x2] Error opening input: Input/output error\n"),
@@ -1166,19 +1217,45 @@ mod tests {
     }
 
     #[test]
-    fn avfoundation_args_crop_in_pixels() {
-        let a = avfoundation_args(
-            1,
-            Some("0"),
-            Some((10, 20, 641, 480)),
-            60,
-            Path::new("/v/.R.mkv"),
-        );
-        assert!(a.windows(2).any(|w| w == s(&["-i", "1:0"])));
-        assert!(a.windows(2).any(|w| w == s(&["-vf", "crop=640:480:10:20"])));
-        assert!(a.ends_with(&tail(true, "/v/.R.mkv")));
+    fn avfoundation_args_crop_in_proportion() {
+        // 641×480 at (10, 20) of a 2880×1800 image: the same area whether the screen's frames
+        // come in pixels (iw 2880: 640×480 at 10, 20) or in points (iw 1440: 320×240 at 5, 10).
+        let r = Region {
+            x: 1450,
+            y: 20,
+            w: 641,
+            h: 480,
+            screen: 1,
+            lx: 10,
+            ly: 20,
+            fw: 2880,
+            fh: 1800,
+        };
+        let a = avfoundation_args(1, Some(0), Some(r), 60, Path::new("/v/.R.mkv"));
+        let mut want = s(&[
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "avfoundation",
+            "-capture_cursor",
+            "1",
+            "-framerate",
+            "60",
+            "-pixel_format",
+            "uyvy422",
+            "-i",
+            "1:0",
+            "-vf",
+            "crop=trunc(iw*641/2880/2)*2:trunc(ih*480/1800/2)*2:trunc(iw*10/2880):trunc(ih*20/1800)",
+        ]);
+        want.extend(tail(true, "/v/.R.mkv"));
+        assert_eq!(a, want);
         let b = avfoundation_args(1, None, None, 30, Path::new("/o.mkv"));
         assert!(b.windows(2).any(|w| w == s(&["-i", "1:none"])));
+        assert!(b
+            .windows(3)
+            .any(|w| w == s(&["-pixel_format", "uyvy422", "-i"])));
         assert!(!b.iter().any(|x| x == "-vf"));
         assert!(b.ends_with(&tail(false, "/o.mkv")));
     }
@@ -1226,6 +1303,8 @@ mod tests {
             screen: 0,
             lx: 0,
             ly: 0,
+            fw: 0,
+            fh: 0,
         };
         let mut args = record_args(&ffmpeg, region, &display, false, 30, None, &mkv).unwrap();
         args.splice(args.len() - 2..args.len() - 2, strs(&["-t", "1"]));

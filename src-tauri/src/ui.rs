@@ -8,7 +8,7 @@ use tauri::{
 
 use crate::{capture::Frame, cli::Cmd, err};
 use std::time::Duration;
-use tauri::{Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 #[cfg(target_os = "linux")]
 use gtk::prelude::*;
@@ -145,13 +145,14 @@ pub fn recording_started(
     if full {
         return Ok(());
     }
-    let (area, s, work_area) = placement(app, r)?;
+    let m = placement(app, (r.x, r.y), (r.x - r.lx as i32, r.y - r.ly as i32))?;
+    let s = m.scale_factor();
     // A frame that failed halfway (e.g. not click-through) goes; the pill comes up regardless.
-    let frame = show_frame(app, area, s);
+    let frame = show_frame(app, r, s);
     if frame.is_err() {
         close_prefix(app, "recframe");
     }
-    let pill = show_pill(app, area, s, work_area);
+    let pill = show_pill(app, r, &m);
     if pill.is_err() {
         close_prefix(app, "pill");
     }
@@ -159,116 +160,94 @@ pub fn recording_started(
     pill.and(frame)
 }
 
-/// A monitor's work area, `(x, y, w, h)`.
-type WorkArea = (i32, i32, i32, i32);
-
-/// Where a recording's frame and pill go: the area `r`, its monitor's scale and work area, in
-/// physical px. On macOS in points instead (scale 1), placed as logical positions like the
-/// overlays: tao converts a physical position with the scale of the screen the window is on now,
-/// not the target's, which is wrong on mixed-scale Macs.
+/// The monitor showing desktop point `at` (physical px) of the frame whose origin is `origin`, for
+/// placing a window there with `placed_at`. macOS goes by the origin: tao has monitor positions
+/// as points × that monitor's own scale, as frames have theirs (nearest, not equal: rounding),
+/// while the physical rects of mixed-scale monitors can overlap, so a point alone can name the
+/// wrong monitor.
 fn placement(
     app: &AppHandle,
-    r: crate::recorder::Region,
-) -> Result<(crate::recorder::Region, f64, WorkArea), String> {
+    at: (i32, i32),
+    origin: (i32, i32),
+) -> Result<tauri::Monitor, String> {
     #[cfg(not(target_os = "macos"))]
     {
-        let m = monitor_at(app, r.x.into(), r.y.into())?;
-        let wa = m.work_area();
-        let (p, sz) = (wa.position, wa.size);
-        Ok((
-            r,
-            m.scale_factor(),
-            (p.x, p.y, sz.width as i32, sz.height as i32),
-        ))
+        let _ = origin;
+        monitor_at(app, at.0.into(), at.1.into())
     }
     #[cfg(target_os = "macos")]
     {
-        // Its monitor is the one at its frame's origin (`x - lx`): tao has monitor positions as
-        // points × that monitor's own scale, as frames are. Nearest, not equal: rounding.
-        let (ox, oy) = (r.x - r.lx as i32, r.y - r.ly as i32);
-        let m = app
-            .available_monitors()
+        let _ = at;
+        app.available_monitors()
             .map_err(err)?
             .into_iter()
-            .min_by_key(|m| (m.position().x - ox).abs() + (m.position().y - oy).abs())
-            .ok_or("no monitor")?;
-        let s = m.scale_factor();
-        let wa = m.work_area();
-        let (x, y) = (f64::from(wa.position.x) / s, f64::from(wa.position.y) / s);
-        let (w, h) = (f64::from(wa.size.width) / s, f64::from(wa.size.height) / s);
-        Ok((
-            in_points(r, s),
-            1.0,
-            (x.round() as i32, y.round() as i32, w as i32, h as i32),
-        ))
+            .min_by_key(|m| (m.position().x - origin.0).abs() + (m.position().y - origin.1).abs())
+            .ok_or_else(|| "no monitor".to_string())
     }
 }
 
-/// `r`, in physical px on a monitor of scale `s`, in points: rounded outwards, so it still covers
-/// the area.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn in_points(r: crate::recorder::Region, s: f64) -> crate::recorder::Region {
-    let pt = |v: i32| f64::from(v) / s;
-    let (x0, y0) = (pt(r.x).floor(), pt(r.y).floor());
-    let (x1, y1) = (pt(r.x + r.w as i32).ceil(), pt(r.y + r.h as i32).ceil());
-    crate::recorder::Region {
-        x: x0 as i32,
-        y: y0 as i32,
-        w: (x1 - x0) as u32,
-        h: (y1 - y0) as u32,
-        ..r
-    }
-}
-
-/// A window position in `placement`'s units: physical px, points on macOS.
-fn placed_at(x: i32, y: i32) -> tauri::Position {
+/// A window position from physical desktop px on a monitor of scale `s`. macOS takes it in that
+/// monitor's points (÷ `s`), as `place_overlays` does: tao converts a physical position with the
+/// scale of the screen the window is on now, not the target's, which is wrong on mixed-scale Macs.
+fn placed_at(x: i32, y: i32, s: f64) -> tauri::Position {
     #[cfg(target_os = "macos")]
     {
-        tauri::LogicalPosition::new(f64::from(x), f64::from(y)).into()
+        tauri::LogicalPosition::new(f64::from(x) / s, f64::from(y) / s).into()
     }
     #[cfg(not(target_os = "macos"))]
     {
-        PhysicalPosition::new(x, y).into()
+        let _ = s;
+        tauri::PhysicalPosition::new(x, y).into()
     }
 }
 
-/// The control pill, above the area's frame or below it, within the monitor's work area (all in
-/// `placement`'s units, on a monitor of scale `s`).
+/// A window size from physical px on a monitor of scale `s`, as `placed_at`.
+fn placed_size(w: u32, h: u32, s: f64) -> tauri::Size {
+    #[cfg(target_os = "macos")]
+    {
+        tauri::LogicalSize::new(f64::from(w) / s, f64::from(h) / s).into()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = s;
+        tauri::PhysicalSize::new(w, h).into()
+    }
+}
+
+/// The control pill, above the area's frame or below it, within the monitor's work area.
 fn show_pill(
     app: &AppHandle,
     r: crate::recorder::Region,
-    s: f64,
-    work_area: WorkArea,
+    m: &tauri::Monitor,
 ) -> Result<(), String> {
+    let s = m.scale_factor();
     let (pw, ph) = (300.0, 52.0);
     let pill = popup(app, "pill", "pill/index.html", pw, ph, false)?;
     // Within the work area: clear of the top bar and the dock.
+    let wa = m.work_area();
     let (x, y) = pill_position(
         r,
         frame_margin(s),
         ((pw * s) as i32, (ph * s) as i32, (4.0 * s) as i32),
-        work_area,
+        (
+            wa.position.x,
+            wa.position.y,
+            wa.size.width as i32,
+            wa.size.height as i32,
+        ),
     );
-    pill.set_position(placed_at(x, y)).map_err(err)?;
+    pill.set_position(placed_at(x, y, s)).map_err(err)?;
     #[cfg(target_os = "linux")]
     unmanaged(&pill)?;
     pill.show().map_err(err)
 }
 
-/// The dashed frame around area `r` on a monitor of scale `s` (`placement`'s units): transparent
-/// and click-through.
+/// The dashed frame around area `r` on a monitor of scale `s`: transparent and click-through.
 fn show_frame(app: &AppHandle, r: crate::recorder::Region, s: f64) -> Result<(), String> {
     let (x, y, w, h) = frame_rect(r, s);
     let frame = popup(app, "recframe", "recframe/index.html", 100.0, 100.0, false)?;
-    frame.set_position(placed_at(x, y)).map_err(err)?;
-    #[cfg(target_os = "macos")]
-    frame
-        .set_size(tauri::LogicalSize::new(f64::from(w), f64::from(h)))
-        .map_err(err)?;
-    #[cfg(not(target_os = "macos"))]
-    frame
-        .set_size(tauri::PhysicalSize::new(w, h))
-        .map_err(err)?;
+    frame.set_position(placed_at(x, y, s)).map_err(err)?;
+    frame.set_size(placed_size(w, h, s)).map_err(err)?;
     #[cfg(target_os = "linux")]
     unmanaged(&frame)?;
     // After show: tao sets the empty input shape on the GdkWindow, which a never-shown window
@@ -283,7 +262,8 @@ fn frame_margin(s: f64) -> i32 {
     (8.0 * s).round() as i32
 }
 
-/// The frame window's `(x, y, w, h)` in physical px for area `r` on a monitor of scale `s`.
+/// The frame window's `(x, y, w, h)` in physical px for area `r` on a monitor of scale `s`
+/// (`placed_at`/`placed_size` turn them into points on macOS).
 fn frame_rect(r: crate::recorder::Region, s: f64) -> (i32, i32, u32, u32) {
     let m = frame_margin(s);
     (r.x - m, r.y - m, r.w + 2 * m as u32, r.h + 2 * m as u32)
@@ -548,7 +528,7 @@ pub fn place_overlays(app: &AppHandle, frames: &[Frame]) -> Result<(), String> {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            let pos = PhysicalPosition::new(f.x, f.y);
+            let pos = tauri::PhysicalPosition::new(f.x, f.y);
             if w.outer_position().ok() != Some(pos) || !w.is_fullscreen().unwrap_or(false) {
                 w.set_fullscreen(false).map_err(err)?;
                 w.set_position(pos).map_err(err)?;
@@ -817,16 +797,53 @@ pub fn frame_under_cursor(app: &AppHandle, frames: &[Frame]) -> Result<usize, St
 /// The monitor containing a desktop point in physical px (the cursor, a region), else the primary.
 /// Not `monitor_from_point`: on Linux that takes GDK logical coordinates, so at scale 2 it finds
 /// the wrong monitor, or none.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn monitor_at(app: &AppHandle, x: f64, y: f64) -> Result<tauri::Monitor, String> {
+    monitor_where(app, x as i32, y as i32, |m| {
+        let (p, s) = (m.position(), m.size());
+        (p.x, p.y, s.width, s.height)
+    })
+}
+
+/// The monitor under the pointer. macOS compares in points: tao's cursor is points × the primary
+/// monitor's scale, each monitor's rect points × its own.
+fn monitor_under_cursor(app: &AppHandle) -> Result<tauri::Monitor, String> {
+    let p = app.cursor_position().map_err(err)?;
+    #[cfg(target_os = "macos")]
+    {
+        let s = app
+            .primary_monitor()
+            .map_err(err)?
+            .map_or(1.0, |m| m.scale_factor());
+        monitor_where(
+            app,
+            (p.x / s).floor() as i32,
+            (p.y / s).floor() as i32,
+            |m| {
+                let (pos, size, s) = (m.position(), m.size(), m.scale_factor());
+                let pt = |v: f64| (v / s).round();
+                (
+                    pt(pos.x.into()) as i32,
+                    pt(pos.y.into()) as i32,
+                    pt(size.width.into()) as u32,
+                    pt(size.height.into()) as u32,
+                )
+            },
+        )
+    }
+    #[cfg(not(target_os = "macos"))]
+    monitor_at(app, p.x, p.y)
+}
+
+/// The monitor whose `rect(m)` `(x, y, w, h)` contains `(x, y)` (same units), else the primary.
+fn monitor_where(
+    app: &AppHandle,
+    x: i32,
+    y: i32,
+    rect: impl Fn(&tauri::Monitor) -> (i32, i32, u32, u32),
+) -> Result<tauri::Monitor, String> {
     let mut all = app.available_monitors().map_err(err)?;
-    let i = crate::capture::rect_at(
-        all.iter().map(|m| {
-            let (p, s) = (m.position(), m.size());
-            (p.x, p.y, s.width, s.height)
-        }),
-        x as i32,
-        y as i32,
-    );
+    let i = crate::capture::rect_at(all.iter().map(rect), x, y);
     match i {
         Some(i) => Ok(all.swap_remove(i)),
         None => app
@@ -873,8 +890,7 @@ fn new_editor(
     path: std::path::PathBuf,
     canon: std::path::PathBuf,
 ) -> Result<WebviewWindow, String> {
-    let cursor = app.cursor_position().map_err(err)?;
-    let m = monitor_at(app, cursor.x, cursor.y)?;
+    let m = monitor_under_cursor(app)?;
     let s = m.scale_factor();
     let (mw, mh) = (m.size().width as f64 / s, m.size().height as f64 / s);
     let (w, h) = ((mw * 0.8).max(800.0), (mh * 0.8).max(560.0));
@@ -921,7 +937,7 @@ fn new_editor(
     });
     let x = m.position().x + ((m.size().width as f64 - w * s) / 2.0) as i32;
     let y = m.position().y + ((m.size().height as f64 - h * s) / 2.0) as i32;
-    win.set_position(PhysicalPosition::new(x, y)).map_err(err)?;
+    win.set_position(placed_at(x, y, s)).map_err(err)?;
     Ok(win)
 }
 
@@ -934,14 +950,19 @@ fn forget_editor(app: &AppHandle, label: &str) {
     crate::stream::revoke(label);
 }
 
-/// Countdown ring centred on a desktop point (physical pixels).
-pub fn show_countdown(app: &AppHandle, (cx, cy): (i32, i32)) -> Result<(), String> {
-    let s = monitor_at(app, cx.into(), cy.into())?.scale_factor();
+/// Countdown ring centred on a desktop point (physical pixels) of the frame at `origin`.
+pub fn show_countdown(
+    app: &AppHandle,
+    (cx, cy): (i32, i32),
+    origin: (i32, i32),
+) -> Result<(), String> {
+    let s = placement(app, (cx, cy), origin)?.scale_factor();
     let (w, h) = (160.0, 180.0);
     let win = popup(app, "countdown", "countdown/index.html", w, h, true)?;
-    win.set_position(PhysicalPosition::new(
+    win.set_position(placed_at(
         cx - (w * s / 2.0) as i32,
         cy - (h * s / 2.0) as i32,
+        s,
     ))
     .map_err(err)?;
     win.show().map_err(err)?;
@@ -950,14 +971,13 @@ pub fn show_countdown(app: &AppHandle, (cx, cy): (i32, i32)) -> Result<(), Strin
 
 /// Bottom-right of the monitor under the pointer.
 pub fn show_thumbnail(app: &AppHandle) -> Result<(), String> {
-    let p = app.cursor_position().map_err(err)?;
-    let m = monitor_at(app, p.x, p.y)?;
+    let m = monitor_under_cursor(app)?;
     let s = m.scale_factor();
     let (w, h) = (270.0, 240.0);
     let win = popup(app, "thumbnail", "thumbnail/index.html", w, h, false)?;
     let x = m.position().x + m.size().width as i32 - ((w + 6.0) * s) as i32;
     let y = m.position().y + m.size().height as i32 - ((h + 6.0) * s) as i32;
-    win.set_position(PhysicalPosition::new(x, y)).map_err(err)?;
+    win.set_position(placed_at(x, y, s)).map_err(err)?;
     win.show().map_err(err)
 }
 
@@ -979,6 +999,8 @@ mod tests {
             screen: 0,
             lx: 0,
             ly: 0,
+            fw: 0,
+            fh: 0,
         };
         for s in [1.0, 1.25, 2.0] {
             let (x, y, w, h) = frame_rect(a, s);
@@ -1001,25 +1023,6 @@ mod tests {
     }
 
     #[test]
-    fn a_retina_area_in_points_still_covers_it() {
-        // Frame origin 2880 px (1440 pt at scale 2), area at image px (101, 51), 641×377 px.
-        let r = Region {
-            x: 2981,
-            y: 51,
-            w: 641,
-            h: 377,
-            screen: 1,
-            lx: 101,
-            ly: 51,
-        };
-        let p = in_points(r, 2.0);
-        // 1490..1811 × 25..214 pt = 2980..3622 × 50..428 px ⊇ the area.
-        assert_eq!((p.x, p.y, p.w, p.h), (1490, 25, 321, 189));
-        assert_eq!((p.screen, p.lx, p.ly), (1, 101, 51));
-        assert_eq!(in_points(r, 1.0), r);
-    }
-
-    #[test]
     fn pill_sits_outside_the_area_and_in_the_work_area() {
         let area = |x, y, w, h| Region {
             x,
@@ -1029,6 +1032,8 @@ mod tests {
             screen: 0,
             lx: 0,
             ly: 0,
+            fw: 0,
+            fh: 0,
         };
         let pill = (300, 52, 4);
         let mon = (1920, 0, 2560, 1600);
