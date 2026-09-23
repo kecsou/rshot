@@ -23,6 +23,12 @@ describe('geometry', () => {
     expect(M.bounds(pen)).toEqual({ x: 1, y: 2, w: 7, h: 7 });
     expect(M.bounds(counter(2, 1), 2)).toEqual({ x: 50 - 26, y: 50 - 26, w: 52, h: 52 });
   });
+  it('redactBlock stays coarse enough to hide text, scaled by the unit and growing with strength', () => {
+    expect(M.redactBlock(0, 1)).toBeGreaterThanOrEqual(12);
+    expect(M.redactBlock(0, 2)).toBeGreaterThanOrEqual(24);
+    expect(M.redactBlock(0.5, 1)).toBeGreaterThan(M.redactBlock(0, 1));
+    expect(M.redactBlock(1, 1)).toBeGreaterThan(M.redactBlock(0.5, 1));
+  });
 });
 
 describe('hit testing', () => {

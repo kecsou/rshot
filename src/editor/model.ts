@@ -31,6 +31,11 @@ export function unitFor(w: number, h: number): number {
   return Math.min(2, Math.max(1, Math.min(w, h) / 1080));
 }
 
+/** Redaction block size in image px: coarse enough at any strength that text can't be read back, scaled with the unit. */
+export function redactBlock(strength: number, u: number): number {
+  return Math.round((12 + 20 * strength) * u);
+}
+
 export function norm(a: Pt, b: Pt): Rect {
   return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
 }

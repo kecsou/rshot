@@ -1,4 +1,4 @@
-import { type Doc, type Rect, type Shape, COUNTER_R, TEXT_PX, bounds, exportOrder, handles, norm, strokeWidth } from './model';
+import { type Doc, type Rect, type Shape, COUNTER_R, TEXT_PX, bounds, exportOrder, handles, norm, redactBlock, strokeWidth } from './model';
 
 export type Src = CanvasImageSource & { width: number; height: number };
 
@@ -100,14 +100,17 @@ function counter(ctx: CanvasRenderingContext2D, s: Extract<Shape, { kind: 'count
 }
 
 /** Pixelate/blur re-sample the ORIGINAL pixels through a small canvas, so the saved PNG holds no trace of them. */
-function redact(ctx: CanvasRenderingContext2D, src: Src, r: Rect, mode: string, strength: number) {
+function redact(ctx: CanvasRenderingContext2D, src: Src, r: Rect, mode: string, strength: number, u: number) {
+  // Snap outward to whole pixels so antialiased edges can't blend original pixels back in.
+  const x = Math.floor(r.x), y = Math.floor(r.y);
+  r = { x, y, w: Math.ceil(r.x + r.w) - x, h: Math.ceil(r.y + r.h) - y };
   if (r.w < 1 || r.h < 1) return;
   if (mode === 'solid') {
     ctx.fillStyle = '#1c1c1e';
     ctx.fillRect(r.x, r.y, r.w, r.h);
     return;
   }
-  const block = Math.round(mode === 'pixelate' ? 6 + strength * 26 : 4 + strength * 16);
+  const block = redactBlock(strength, u);
   const small = document.createElement('canvas');
   small.width = Math.max(1, Math.round(r.w / block));
   small.height = Math.max(1, Math.round(r.h / block));
@@ -125,7 +128,7 @@ export function drawShape(ctx: CanvasRenderingContext2D, src: Src, s: Shape, u: 
   ctx.lineJoin = 'round';
   switch (s.kind) {
     case 'redact':
-      redact(ctx, src, norm(s.a, s.b), s.mode, s.strength);
+      redact(ctx, src, norm(s.a, s.b), s.mode, s.strength, u);
       break;
     case 'arrow':
       arrow(ctx, s, u);
@@ -242,8 +245,8 @@ export function drawCrop(ctx: CanvasRenderingContext2D, r: Rect, W: number, H: n
 export async function exportPng(src: Src, doc: Doc, u: number, W: number, H: number): Promise<Uint8Array> {
   const r = doc.crop ?? { x: 0, y: 0, w: W, h: H };
   const c = document.createElement('canvas');
-  c.width = Math.round(r.w);
-  c.height = Math.round(r.h);
+  c.width = Math.round(r.x + r.w) - Math.round(r.x);
+  c.height = Math.round(r.y + r.h) - Math.round(r.y);
   const ctx = c.getContext('2d')!;
   ctx.translate(-Math.round(r.x), -Math.round(r.y));
   drawDoc(ctx, src, doc, u);

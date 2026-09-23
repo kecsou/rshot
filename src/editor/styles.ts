@@ -84,6 +84,7 @@ function sync() {
   on('[data-size]', (el) => el.dataset.size === style.size);
   on('[data-tstyle]', (el) => el.dataset.tstyle === style.textStyle);
   on('[data-rmode]', (el) => el.dataset.rmode === style.mode);
+  pop.querySelectorAll('.seg button').forEach((el) => el.setAttribute('aria-pressed', String(el.classList.contains('on'))));
   pop.querySelector('[data-shadow]')?.setAttribute('aria-checked', String(style.shadow));
   const range = pop.querySelector<HTMLInputElement>('[data-strength]');
   if (range) range.value = String(style.strength);
