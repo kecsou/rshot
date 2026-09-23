@@ -6,6 +6,8 @@ mod clipboard;
 mod editor;
 mod overlay;
 mod pipeline;
+#[allow(dead_code)] // wired up in Task 2
+mod recorder;
 mod settings;
 mod shortcuts;
 mod store;
