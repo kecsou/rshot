@@ -758,6 +758,8 @@ impl Drop for Hidden {
 }
 
 /// A small undecorated, transparent, always-on-top window (thumbnail, countdown, recording frame and pill).
+/// On Linux one made unfocused also stays unfocusable (clicks still work): tao makes it focusable
+/// once drawn, and Mutter then gave the thumbnail the focus the overlay left, so Ctrl+V went to the card.
 pub fn popup(
     app: &AppHandle,
     prefix: &str,
@@ -768,7 +770,7 @@ pub fn popup(
 ) -> Result<WebviewWindow, String> {
     close_prefix(app, prefix);
     let n = POPUP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    WebviewWindowBuilder::new(app, format!("{prefix}-{n}"), WebviewUrl::App(page.into()))
+    let b = WebviewWindowBuilder::new(app, format!("{prefix}-{n}"), WebviewUrl::App(page.into()))
         .title("rshot")
         .decorations(false)
         .transparent(true)
@@ -777,9 +779,11 @@ pub fn popup(
         .shadow(false)
         .focused(focused)
         .visible(false)
-        .inner_size(w, h)
-        .build()
-        .map_err(err)
+        .inner_size(w, h);
+    // Linux only: seen on Mutter; elsewhere an unfocusable window's clicks are untested.
+    #[cfg(target_os = "linux")]
+    let b = b.focusable(focused);
+    b.build().map_err(err)
 }
 
 /// Index of the frame under the pointer. macOS compares in points: tao's cursor is points × the
