@@ -4,3 +4,7 @@ node_modules/
 dist/
 src-tauri/gen/
 src-tauri/binaries/
+# graphify: keep the graph and report, drop machine-local cache, paths and cost log
+graphify-out/*
+!graphify-out/graph.json
+!graphify-out/GRAPH_REPORT.md

@@ -1,0 +1,13 @@
+# .gitignore patterns (a .graphifyignore replaces .gitignore for graphify)
+.superpowers/
+target/
+node_modules/
+dist/
+src-tauri/gen/
+src-tauri/binaries/
+# no semantic content
+src-tauri/icons/
+src-tauri/sounds/
+FFMPEG-NOTICES.txt
+# renders of the .html mockups next to them
+docs/design/mockups/*.png
