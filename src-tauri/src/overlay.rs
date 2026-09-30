@@ -139,16 +139,7 @@ pub fn overlay_info(
         let s = session.as_ref()?;
         let f = s.frames.get(index)?;
         let c = state.config.lock().unwrap();
-        let selection = c
-            .last_selection
-            .as_ref()
-            .filter(|l| c.remember_selection && l.monitor == f.name)
-            .map(|l| Rect {
-                x: l.x.into(),
-                y: l.y.into(),
-                w: l.w.into(),
-                h: l.h.into(),
-            });
+        let selection = remembered(&c, &f.name, index == s.active);
         let info = OverlayInfo {
             token: s.token,
             mode: s.mode.clone(),
@@ -540,6 +531,20 @@ fn run_pending(app: &AppHandle, p: Pending) -> Result<(), String> {
     pipeline::finish_capture(app, img).map(|_| ())
 }
 
+/// The remembered selection, on the overlay under the pointer only: shown on another monitor, it
+/// looked like a second selector, and Enter (which goes to the overlay under the pointer) ignored it.
+fn remembered(c: &store::Config, monitor: &str, active: bool) -> Option<Rect> {
+    c.last_selection
+        .as_ref()
+        .filter(|l| active && c.remember_selection && l.monitor == monitor)
+        .map(|l| Rect {
+            x: l.x.into(),
+            y: l.y.into(),
+            w: l.w.into(),
+            h: l.h.into(),
+        })
+}
+
 fn remember(app: &AppHandle, monitor: &str, r: Rect) {
     let state = app.state::<AppState>();
     let mut c = state.config.lock().unwrap();
@@ -576,5 +581,32 @@ mod tests {
         assert!(matches!(t(r#"{"kind":"screen"}"#), Target::Screen));
         assert_eq!(ui::overlay_index("overlay-2"), Some(2));
         assert_eq!(ui::overlay_index("settings"), None);
+    }
+
+    #[test]
+    fn the_remembered_selection_shows_only_under_the_pointer() {
+        let mut c = store::Config {
+            remember_selection: true,
+            last_selection: Some(store::Selection {
+                monitor: "DP-1".into(),
+                x: 122,
+                y: 132,
+                w: 1690,
+                h: 947,
+            }),
+            ..Default::default()
+        };
+        let r = Rect {
+            x: 122.0,
+            y: 132.0,
+            w: 1690.0,
+            h: 947.0,
+        };
+        assert_eq!(remembered(&c, "DP-1", true), Some(r));
+        // Its monitor isn't the one under the pointer: no second selector there.
+        assert_eq!(remembered(&c, "DP-1", false), None);
+        assert_eq!(remembered(&c, "DP-4", true), None);
+        c.remember_selection = false;
+        assert_eq!(remembered(&c, "DP-1", true), None);
     }
 }
