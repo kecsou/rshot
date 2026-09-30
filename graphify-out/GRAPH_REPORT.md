@@ -1,13 +1,18 @@
-# Graph Report - .  (2026-09-30)
+# Graph Report - rshot  (2026-09-30)
 
 ## Corpus Check
-- 88 files · ~121,823 words
+- 72 files · ~122,007 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1339 nodes · 2785 edges · 58 communities (55 shown, 3 thin omitted)
+- 1445 nodes · 2895 edges · 70 communities (67 shown, 3 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 112 edges (avg confidence: 0.85)
-- Token cost: 396,097 input · 0 output
+- Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `d74da466`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Recorder Backends|Recorder Backends]]
@@ -67,18 +72,30 @@
 - [[_COMMUNITY_Thumbnail Capability|Thumbnail Capability]]
 - [[_COMMUNITY_Deb Pre-Remove Hook|Deb Pre-Remove Hook]]
 - [[_COMMUNITY_Vite Config|Vite Config]]
+- [[_COMMUNITY_Community 58|Community 58]]
+- [[_COMMUNITY_Community 59|Community 59]]
+- [[_COMMUNITY_Community 60|Community 60]]
+- [[_COMMUNITY_Community 61|Community 61]]
+- [[_COMMUNITY_Community 62|Community 62]]
+- [[_COMMUNITY_Community 63|Community 63]]
+- [[_COMMUNITY_Community 64|Community 64]]
+- [[_COMMUNITY_Community 65|Community 65]]
+- [[_COMMUNITY_Community 66|Community 66]]
+- [[_COMMUNITY_Community 67|Community 67]]
+- [[_COMMUNITY_Community 68|Community 68]]
+- [[_COMMUNITY_Community 69|Community 69]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `$()` - 68 edges
-2. `Autonomous run decisions log` - 36 edges
-3. `$()` - 34 edges
-4. `AppHandle` - 31 edges
-5. `rshot Design Spec` - 31 edges
-6. `Result` - 24 edges
-7. `rshot Plan 3: Recording` - 23 edges
-8. `String` - 21 edges
-9. `String` - 21 edges
-10. `rshot Plan 4: Windows/macOS + Installers` - 21 edges
+2. `$()` - 34 edges
+3. `AppHandle` - 31 edges
+4. `Result` - 24 edges
+5. `String` - 21 edges
+6. `String` - 21 edges
+7. `Config` - 18 edges
+8. `PathBuf` - 18 edges
+9. `render()` - 18 edges
+10. `String` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `trim_video()` --implements--> `Video trim editor (spec 2.7)`  [INFERRED]
@@ -113,7 +130,7 @@
 - **Per-platform shortcut takeover mechanisms** — readme_shortcut_takeover, readme_gnome_custom_keybindings, readme_windows_keyboard_hook, readme_macos_symbolic_hotkeys, readme_restore_shortcuts [INFERRED 0.85]
 - **Bundled GPL ffmpeg compliance chain** — readme_rshot_ffmpeg_sidecar, third_party_btbn_ffmpeg_builds, third_party_martin_riedl_builds, third_party_x264_0480cb05, third_party_ffmpeg_notices, workflows_release_create_release, readme_licensing_gaps [INFERRED 0.85]
 
-## Communities (58 total, 3 thin omitted)
+## Communities (70 total, 3 thin omitted)
 
 ### Community 0 - "Recorder Backends"
 Cohesion: 0.07
@@ -148,8 +165,8 @@ Cohesion: 0.10
 Nodes (40): Binding, LPARAM, LRESULT, Mods, a_press_long_after_the_last_event_is_new_not_a_repeat(), a_taken_key_runs_once_and_its_repeats_and_release_are_swallowed(), backup(), bindings() (+32 more)
 
 ### Community 8 - "Overlay Capture Commands"
-Cohesion: 0.15
-Nodes (38): after_countdown(), capture_from(), countdown_cancel(), countdown_done(), countdown_info(), overlay_activate(), overlay_cancel(), overlay_capture() (+30 more)
+Cohesion: 0.14
+Nodes (39): after_countdown(), capture_from(), countdown_cancel(), countdown_done(), countdown_info(), overlay_activate(), overlay_cancel(), overlay_capture() (+31 more)
 
 ### Community 9 - "GNOME Shortcut Takeover"
 Cohesion: 0.11
@@ -176,8 +193,8 @@ Cohesion: 0.08
 Nodes (27): AtomicU64, Clipboard, Display, malloc_trim(0) after session (dropped), Memory target (<= 320 MB PSS after use), Fixed M_MMAP_THRESHOLD = 1 MB, WEBKIT_DISABLE_DMABUF_RENDERER=1 workaround, HashMap (+19 more)
 
 ### Community 15 - "Recording Flow Design"
-Cohesion: 0.10
-Nodes (27): Mockup 04: screen recording, Dashed red recording frame outside the area, rshot Plan 3: Recording, Video delivery via Tauri asset protocol (per-file scope), Dashed red recording frame (recframe), Frame-accurate trim (-ss before -i with re-encode), Graceful ffmpeg stop (q on stdin, 10 s deadline, then kill), 3 s record countdown via pending_rec (+19 more)
+Cohesion: 0.18
+Nodes (18): Mockup 04: screen recording, Dashed red recording frame outside the area, Dashed red recording frame (recframe), Frame-accurate trim (-ss before -i with re-encode), Graceful ffmpeg stop (q on stdin, 10 s deadline, then kill), 3 s record countdown via pending_rec, Recording control pill, Recording watchdog thread (+10 more)
 
 ### Community 16 - "Clipboard Owner Thread"
 Cohesion: 0.16
@@ -188,24 +205,24 @@ Cohesion: 0.07
 Nodes (26): bugs, url, dependencies, @crabnebula/tauri-plugin-drag, @fontsource/inter, @tauri-apps/api, devDependencies, @tauri-apps/cli (+18 more)
 
 ### Community 18 - "Editor Actions & Crop"
-Cohesion: 0.18
-Nodes (26): commit(), commitText(), copy(), done(), enterCrop(), exitCrop(), fatal(), fit() (+18 more)
+Cohesion: 0.30
+Nodes (15): commit(), done(), enterCrop(), exitCrop(), fit(), full(), moveCropDrag(), redo() (+7 more)
 
 ### Community 19 - "Thumbnail Path Guard"
 Cohesion: 0.21
 Nodes (22): AppHandle, AppState, Option, Path, PathBuf, Response, Result, State (+14 more)
 
 ### Community 20 - "Design Spec & Perf Targets"
-Cohesion: 0.13
-Nodes (25): docs/perf.md performance gate report, Capture -> saved + clipboard latency (<= 300 ms), rshot Design Spec, Clipboard contract (path + file + image), Floating thumbnail card, Image editor (spec 2.5), Performance targets (spec 5), Preloaded overlay windows (+17 more)
+Cohesion: 0.10
+Nodes (27): Capture -> saved + clipboard latency (<= 300 ms), Simplification: pen/highlighter/text/counter move but don't resize, Vector shapes in image-pixel coordinates until export, Absolute file path on clipboard, Clipboard contract (path + file + image), Floating thumbnail card, Frozen-frame overlay per monitor, Style A - Glass visual contract (+19 more)
 
 ### Community 21 - "Bundled ffmpeg & Release"
-Cohesion: 0.12
-Nodes (22): fetch-ffmpeg.sh script, ffmpeg-notices.sh script, rshot-ffmpeg sidecar naming, Develop prerequisites (Rust stable, Node 22, apt libs), Linux packages need glibc 2.39 (Ubuntu 24.04 build), Licensing gaps before first public release, Owner smoke test checklist (Windows and macOS), rshot-ffmpeg bundled sidecar (+14 more)
+Cohesion: 0.16
+Nodes (18): fetch-ffmpeg.sh script, ffmpeg-notices.sh script, Develop prerequisites (Rust stable, Node 22, apt libs), Linux packages need glibc 2.39 (Ubuntu 24.04 build), Licensing gaps before first public release, rshot-ffmpeg bundled sidecar, Screen recording flow (3 s countdown, MP4 H.264), check() (+10 more)
 
 ### Community 22 - "Visual Direction Mockups"
-Cohesion: 0.09
-Nodes (23): countdown/index.html, editor/index.html, Mockup 01 Visual Direction (Glass, thumbnail 01-A), Direction B: Adwaita GNOME-native, Direction A: Glass macOS-like (chosen), Direction C: Signal developer tool (monospace, lime), Timer countdown ring, Mockup 03 Editor (+15 more)
+Cohesion: 0.22
+Nodes (9): countdown/index.html, Mockup 01 Visual Direction (Glass, thumbnail 01-A), Direction B: Adwaita GNOME-native, Direction A: Glass macOS-like (chosen), Direction C: Signal developer tool (monospace, lime), Timer countdown ring, Recording controls pill, pill/index.html (+1 more)
 
 ### Community 23 - "Settings Backend"
 Cohesion: 0.20
@@ -221,35 +238,35 @@ Nodes (18): Mockup 02 Overlay States, First-launch takeover prompt, Settings as 
 
 ### Community 26 - "Cross-Platform Plan 4"
 Cohesion: 0.15
-Nodes (21): Record shortcut takeover (show-screen-recording-ui -> rshot record), rshot Plan 4: Windows/macOS + Installers, Platform differences behind #[cfg(target_os)] in owning modules, WH_KEYBOARD_LL hook with 0xE8 dummy key, NSIS installer hooks (hooks.nsh), GitHub Actions release workflow (tauri-action), macOS simple-fullscreen overlays, macOS symbolic hotkeys + global-shortcut plugin (+13 more)
+Nodes (18): Record shortcut takeover (show-screen-recording-ui -> rshot record), Platform differences behind #[cfg(target_os)] in owning modules, WH_KEYBOARD_LL hook with 0xE8 dummy key, Neutral shortcut combo parser (combo.rs), NSIS installer hooks (hooks.nsh), Per-OS default shortcuts table, macOS simple-fullscreen overlays, macOS symbolic hotkeys + global-shortcut plugin (+10 more)
 
 ### Community 27 - "Plan 1-2 Frontend Architecture"
-Cohesion: 0.15
-Nodes (20): crate::err (IPC errors as String), Glass style tokens (style A, glass.css), src/shared/ipc.ts typed invoke wrappers, overlay::Target (area | window | screen), selection.ts geometry (fromPoints, clamp, move, resize, handleAt, windowAt), Vite multi-page build (src/<page> -> dist/<page>), Crop with presets Free/16:9/4:3/1:1 (cropFromDrag, fitRatio), Editor interaction main.ts (tools, selection, text, crop, zoom, save/close) (+12 more)
+Cohesion: 0.16
+Nodes (19): crate::err (IPC errors as String), src/shared/ipc.ts typed invoke wrappers, overlay::Target (area | window | screen), selection.ts geometry (fromPoints, clamp, move, resize, handleAt, windowAt), Vite multi-page build (src/<page> -> dist/<page>), Crop with presets Free/16:9/4:3/1:1 (cropFromDrag, fitRatio), Editor interaction main.ts (tools, selection, text, crop, zoom, save/close), Editor tools and keys (V C A R O L P H T N B) (+11 more)
 
 ### Community 28 - "Shortcut Commands Core"
 Cohesion: 0.23
 Nodes (16): command_for(), exe_command(), live_path(), manual_commands(), outdated(), release(), restore(), restore_and_save() (+8 more)
 
 ### Community 29 - "Small Window Frontends"
-Cohesion: 0.14
-Nodes (13): timer, next(), permissionStep(), rows, $(), bars, discard, mic (+5 more)
+Cohesion: 0.19
+Nodes (8): timer, next(), permissionStep(), rows, mountIcons(), run(), setCopied(), clock()
 
 ### Community 30 - "Shortcut Combo Parser"
-Cohesion: 0.20
-Nodes (15): Neutral shortcut combo parser (combo.rs), Per-OS default shortcuts table, bindable(), c(), Combo, Key, parse(), parse_key() (+7 more)
+Cohesion: 0.23
+Nodes (13): bindable(), c(), Combo, Key, parse(), parse_key(), takeable(), takeable_needs_ctrl_alt_or_super_unless_print() (+5 more)
 
 ### Community 31 - "Editor Backend Commands"
 Cohesion: 0.33
 Nodes (17): Request, copy_path(), editor_delete(), editor_info(), editor_paths(), EditorInfo, open_editor(), save_image() (+9 more)
 
 ### Community 32 - "Video Trim UI"
-Cohesion: 0.18
-Nodes (14): usKey(), $(), changed(), copy(), done(), probe, render(), requestClose() (+6 more)
+Cohesion: 0.16
+Nodes (18): usKey(), $(), changed(), copy(), done(), probe, render(), requestClose() (+10 more)
 
 ### Community 33 - "Plan 1 Foundation"
 Cohesion: 0.17
-Nodes (16): rshot Plan 1: Foundation + Linux Screenshots, Autonomous run environment notes (no sudo, xdo.py), cli::Cmd / cli::parse, Debian package (.deb), self-sufficient, crate::dispatch(&AppHandle, Cmd), ui::force_focus (X server timestamp present), Plan-1 manual checklist, overlay::start / overlay::Session (+8 more)
+Nodes (15): Autonomous run environment notes (no sudo, xdo.py), cli::Cmd / cli::parse, Debian package (.deb), self-sufficient, crate::dispatch(&AppHandle, Cmd), ui::force_focus (X server timestamp present), Plan-1 manual checklist, overlay::start / overlay::Session, Performance and focus gate (spec §5, docs/perf.md) (+7 more)
 
 ### Community 34 - "Capture Pipeline"
 Cohesion: 0.35
@@ -264,12 +281,12 @@ Cohesion: 0.17
 Nodes (11): cross-check.sh script, Cross-check verification (clippy for Windows/macOS targets), CARGO_TARGET_DIR, CC_aarch64_apple_darwin, CC_x86_64_apple_darwin, DOCS_RS, PATH, TAURI_CONFIG (+3 more)
 
 ### Community 37 - "App State & Editors"
-Cohesion: 0.24
-Nodes (13): AppState (config, clipboard, last_capture, session, pending, thumb), Capture naming Screenshot_YYYY-MM-DD_HH-MM-SS.png (unique_path, new_screenshot_path), Floating thumbnail (thumbnail.rs, Thumb), ui::monitor_at, thumbnail::guard path guard, thumbnail::tildify, AppState.editors (label -> path map), editor.rs commands (open_editor, editor_info, save_image, editor_delete, copy_path) (+5 more)
+Cohesion: 0.27
+Nodes (12): AppState (config, clipboard, last_capture, session, pending, thumb), Floating thumbnail (thumbnail.rs, Thumb), ui::monitor_at, ui::popup / close_prefix / POPUP_SEQ, thumbnail::guard path guard, Timer countdown window (overlay::Pending), AppState.editors (label -> path map), editor.rs commands (open_editor, editor_info, save_image, editor_delete, copy_path) (+4 more)
 
 ### Community 38 - "Capture & Clipboard Plan"
-Cohesion: 0.22
-Nodes (13): store::write_atomic (temp file + rename), capture.rs (grab_all, frame_at, clamp_rect, crop, encode_png, windows_on, window_image), CI workflow Linux/Windows/macOS (ci.yml), clipboard::Clipboard owner thread (copy_capture, copy_image), Clipboard payload: path + image vs path only, clipboard-rs 0.3 crate, pipeline::finish_capture, Linux-only cfg gating, compile on Windows/macOS (+5 more)
+Cohesion: 0.18
+Nodes (15): store::write_atomic (temp file + rename), capture.rs (grab_all, frame_at, clamp_rect, crop, encode_png, windows_on, window_image), Capture naming Screenshot_YYYY-MM-DD_HH-MM-SS.png (unique_path, new_screenshot_path), CI workflow Linux/Windows/macOS (ci.yml), clipboard::Clipboard owner thread (copy_capture, copy_image), Clipboard payload: path + image vs path only, clipboard-rs 0.3 crate, pipeline::finish_capture (+7 more)
 
 ### Community 39 - "macOS Bundle Config"
 Cohesion: 0.17
@@ -280,16 +297,16 @@ Cohesion: 0.17
 Nodes (11): compilerOptions, isolatedModules, lib, module, moduleResolution, noEmit, skipLibCheck, strict (+3 more)
 
 ### Community 41 - "Settings & Onboarding Plan"
-Cohesion: 0.27
-Nodes (11): Mockup 05 Settings/Onboarding/Tray, GNOME shortcut takeover/restore (shortcuts::take_over, restore), shortcuts::gvariant (parse_strv, format_strv, to_gnome_accel, with_paths, without_paths), keys.ts comboFrom, Onboarding (Use rshot choice), Overlay options popover (options.ts, set_overlay_options, pick_folder), ui::popup / close_prefix / POPUP_SEQ, Settings window (settings.rs get_settings/set_settings) (+3 more)
+Cohesion: 0.31
+Nodes (10): Mockup 05 Settings/Onboarding/Tray, GNOME shortcut takeover/restore (shortcuts::take_over, restore), shortcuts::gvariant (parse_strv, format_strv, to_gnome_accel, with_paths, without_paths), keys.ts comboFrom, Onboarding (Use rshot choice), Overlay options popover (options.ts, set_overlay_options, pick_folder), Settings window (settings.rs get_settings/set_settings), store::Config (TOML, serde default) (+2 more)
 
 ### Community 42 - "Shortcut Recorder Keys"
 Cohesion: 0.25
 Nodes (6): comboFrom(), KeyLike, Mods, esc(), render(), update()
 
 ### Community 43 - "Thumbnail & Trim Helpers"
-Cohesion: 0.31
-Nodes (7): run(), setCopied(), clampTrim(), clock(), fmt(), playable(), timeAt()
+Cohesion: 0.09
+Nodes (23): 1. Goals and non-goals, 2.1 Capture modes and default shortcuts, 2.2 Overlay (mockup 02), 2.3 After a capture, 2.4 Clipboard contract, 2.5 Image editor (mockup 03), 2.6 Recording (mockup 04), 2.7 Video editor (mockup 04d) (+15 more)
 
 ### Community 45 - "Linux Bundle Config"
 Cohesion: 0.25
@@ -331,22 +348,70 @@ Nodes (5): description, identifier, permissions, $schema, windows
 Cohesion: 0.33
 Nodes (5): description, identifier, permissions, $schema, windows
 
+### Community 58 - "Community 58"
+Cohesion: 0.11
+Nodes (19): Environment notes (the author's machine, read before any task), File Map (end state of this plan), Global Constraints, Prerequisites (the user runs these once, before Task 1), rshot Plan 1: Foundation + Linux Screenshots — Implementation Plan, Self-review notes (for the executor), Task 10: GNOME shortcut takeover and restore, Task 11: Onboarding, Settings, final tray menu (+11 more)
+
+### Community 59 - "Community 59"
+Cohesion: 0.16
+Nodes (15): rshot-ffmpeg sidecar naming, GitHub Actions release workflow (tauri-action), Owner smoke test checklist (Windows and macOS), Unsigned Windows/macOS builds, Bundled static ffmpeg sidecar (externalBin), Packaging and distribution (deb/rpm/AppImage/NSIS/dmg), Ad-hoc signing with hardenedRuntime off (macOS), Packages recommend GStreamer H.264 codecs for the trimmer (+7 more)
+
+### Community 60 - "Community 60"
+Cohesion: 0.14
+Nodes (14): A. Preloaded overlays, as built by Task 5 (no fix), B. Preloaded overlays + `force_focus` (brief fallback: fresh X server time + `present_with_time`), C. Experiment, not kept: on-demand overlays (brief's memory fallback), Capture → saved + clipboard (2026-09-23, final-review fix wave), D1. Items 1–4 as specified (`malloc_trim(0)` after each session), D2. Fixed mmap threshold instead (`mallopt(M_MMAP_THRESHOLD, 1 MB)` at daemon start, committed), Decision, round 1, Decision, round 2 (+6 more)
+
+### Community 61 - "Community 61"
+Cohesion: 0.36
+Nodes (11): commitText(), copy(), fatal(), remove(), requestClose(), save(), $(), ask() (+3 more)
+
+### Community 62 - "Community 62"
+Cohesion: 0.18
+Nodes (11): File Map, Global Constraints, rshot Plan 3: Screen Recording + Video Trim — Implementation Plan, Self-review notes, Task 0: Webview hardening — CSP and per-window command allow-lists (Plan 1 final-review ruling), Task 1: ffmpeg sidecar + pure recorder functions, Task 2: Recording engine — config, start/stop/discard, watchdog, tray, `rshot record`, Task 3: Recording UI — overlay record modes, countdown, frame and pill (+3 more)
+
+### Community 63 - "Community 63"
+Cohesion: 0.24
+Nodes (9): $(), bars, discard, mic, pad(), poll(), SHAPE, time (+1 more)
+
+### Community 64 - "Community 64"
+Cohesion: 0.22
+Nodes (9): File Map, Global Constraints, rshot Plan 4: Windows + macOS Support, Installers, Release — Implementation Plan, Self-review notes, Task 1: Neutral shortcut combos + per-OS defaults, Task 2: Windows shortcut takeover (registry + low-level keyboard hook), Task 3: macOS — shortcut takeover, overlays, tray, permission, sound, Task 4: Recording on Windows and macOS (+1 more)
+
+### Community 65 - "Community 65"
+Cohesion: 0.22
+Nodes (9): Before the first public release, Develop, Give the shortcuts back, Install, Known limitations, Other Linux desktops, Owner smoke test (Windows and macOS), Record the screen (+1 more)
+
+### Community 66 - "Community 66"
+Cohesion: 0.22
+Nodes (9): 1. Rulings that change what you asked for or approved, 2. Plan 1: foundation and Linux screenshots, 3. Plan 2: image editor, 4. Plan 3: recording, 5. Plan 4: Windows, macOS, installers, 6. Accepted residuals and parked items, 7. What only you can verify, 8. Leftovers on this machine (+1 more)
+
+### Community 67 - "Community 67"
+Cohesion: 0.29
+Nodes (8): editor/index.html, Mockup 03 Editor, Redact tool (pixelate/blur/solid, irreversible), Done saves over the same file, Editor tool rail with single-key shortcuts, Video trim editor, Trimmer loopback video server (127.0.0.1), video/index.html
+
+### Community 68 - "Community 68"
+Cohesion: 0.25
+Nodes (8): File Map, Global Constraints, rshot Plan 2: Image Editor — Implementation Plan, Self-review notes, Task 1: Editor window and commands, thumbnail/tray wiring, save round-trip, Task 2: Document model (`model.ts`), test-first, Task 3: Canvas rendering and export (`render.ts`) + style popover (`styles.ts`), Task 4: Editor interaction (`main.ts`): tools, selection, text, crop, zoom, save/close flows
+
+### Community 69 - "Community 69"
+Cohesion: 0.50
+Nodes (3): Video delivery via Tauri asset protocol (per-file scope), Webview hardening: CSP + per-window command allow-lists, Loopback HTTP range server for video preview
+
 ## Knowledge Gaps
-- **300 isolated node(s):** `name`, `version`, `doc`, `test`, `dev` (+295 more)
+- **386 isolated node(s):** `name`, `version`, `doc`, `test`, `dev` (+381 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Autonomous run decisions log` connect `Design Spec & Perf Targets` to `Plan 1 Foundation`, `Cross-Check Script`, `Recording Flow Design`, `Bundled ffmpeg & Release`, `Visual Direction Mockups`, `Cross-Platform Plan 4`, `Shortcut Combo Parser`?**
-  _High betweenness centrality (0.252) - this node is a cross-community bridge._
-- **Why does `Trust the observed value on first takeover (+ macOS defaults-domain backup copy)` connect `Design Spec & Perf Targets` to `Cross-Platform Plan 4`, `macOS Shortcut Takeover`, `Windows Keyboard Hook`?**
-  _High betweenness centrality (0.133) - this node is a cross-community bridge._
-- **Why does `$()` connect `Small Window Frontends` to `Frontend IPC Wrappers`, `Visual Direction Mockups`, `Recording Flow Design`?**
-  _High betweenness centrality (0.124) - this node is a cross-community bridge._
+- **Why does `$()` connect `Editor Canvas Main` to `Video Trim UI`, `Community 67`, `Frontend IPC Wrappers`, `Editor Shape Model`, `Editor Actions & Crop`, `Small Window Frontends`, `Editor Rendering & Redact`, `Community 61`?**
+  _High betweenness centrality (0.116) - this node is a cross-community bridge._
+- **Why does `Trust the observed value on first takeover (+ macOS defaults-domain backup copy)` connect `Cross-Platform Plan 4` to `macOS Shortcut Takeover`, `Design Spec & Perf Targets`, `Windows Keyboard Hook`?**
+  _High betweenness centrality (0.113) - this node is a cross-community bridge._
+- **Why does `$()` connect `Community 63` to `Frontend IPC Wrappers`, `Small Window Frontends`, `Visual Direction Mockups`, `Recording Flow Design`?**
+  _High betweenness centrality (0.104) - this node is a cross-community bridge._
 - **What connects `name`, `version`, `doc` to the rest of the system?**
-  _303 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _389 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Recorder Backends` be split into smaller, more focused modules?**
   _Cohesion score 0.07434616514839847 - nodes in this community are weakly interconnected._
 - **Should `Overlay Windows & Focus` be split into smaller, more focused modules?**
